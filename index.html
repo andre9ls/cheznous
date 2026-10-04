@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>ChezNous - Gestione Casa</title>
+    <style>
+        :root {
+            --color-green: #A6AA90; /* Sikkens H8.12.61 */
+            --color-beige: #E9DDC9; /* Sikkens F6.07.82 */
+            --color-bg:    #F8F8F5;
+            --color-text:  #000000;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--color-green);
+            color: var(--color-text);
+            padding: 24px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 1.65rem;
+            font-weight: 800;
+            color: #000000;
+            line-height: 1.4;
+        }
+
+        main {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        @media (min-width: 600px) {
+            .button-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 900px) {
+            .button-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        .nav-btn {
+            border: none;
+            border-radius: 24px;
+            padding: 40px 20px;
+            font-size: 1.25rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            text-align: center;
+            color: var(--color-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+            opacity: 0.9;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.25);
+            background-color: var(--color-beige);
+        }
+
+        .nav-btn:active {
+            transform: scale(0.96);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .nav-btn:hover {
+            opacity: 0.75;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        .section-title {
+            width: 100%;
+            max-width: 1000px;
+            margin-top: 50px;
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #000000;
+            text-align: center;
+        }
+
+        /* ---- Modal ---- */
+        .modal-btn {
+            background-color: var(--color-bg);
+            color: #000;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            width: 34px;
+            height: 34px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .modal-btn:active {
+            transform: scale(0.9);
+            background-color: #eee;
+        }
+
+        .varie-cols {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        @media (max-width: 600px) {
+            .varie-cols { grid-template-columns: 1fr; }
+        }
+
+        .varie-col {
+            background: var(--color-beige);
+            border-radius: 16px;
+            padding: 16px;
+        }
+
+        .varie-col h3 {
+            text-align: center;
+            font-size: 1rem;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0,0,0,0.12);
+        }
+
+        .varie-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            font-size: 0.9rem;
+            gap: 6px;
+        }
+
+        .varie-row:last-child { border-bottom: none; }
+        .varie-row span { flex: 1; }
+
+        .varie-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .varie-controls b {
+            min-width: 22px;
+            text-align: center;
+            font-size: 1rem;
+        }
+
+        /* Stato connessione */
+        #sync-status {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            font-size: 0.75rem;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.15);
+            color: #000;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+
+        dialog::backdrop {
+            background: rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Via Napione 21 Bis, <span id="current-date"></span></h1>
+    </header>
+
+    <main>
+        <div class="section-title" style="margin-top: 0;">Inventario</div>
+        <div class="button-grid">
+            <button class="nav-btn">🛒 Spesa</button>
+            <button class="nav-btn">❄️ Freezer e Cibo</button>
+
+            <button class="nav-btn">🍷 Cantina</button>
+            <button class="nav-btn">🥫 Dispensa</button>
+
+            <button class="nav-btn">🐈 Muffin</button>
+            <button class="nav-btn" onclick="apriVarie()">🛠️ Varie</button>
+
+            <button class="nav-btn">🍽️ Cene</button>
+            <button class="nav-btn">🪴 Piante</button>
+        </div>
+    </main>
+
+    <!-- MODAL VARIE -->
+    <dialog id="varie-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 820px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
+        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🛠️ Varie</h2>
+
+        <div class="varie-cols">
+
+            <!-- LAVASTOVIGLIE -->
+            <div class="varie-col">
+                <h3>🧼 Lavastoviglie</h3>
+                <div class="varie-row">
+                    <span>Pastiglie</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('lavastoviglie', -1)">-1</button>
+                        <b id="count-lavastoviglie">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'lavastoviglie')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>Sale</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('sale', -1)">-1</button>
+                        <b id="count-sale">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'sale')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>Cura</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('cura', -1)">-1</button>
+                        <b id="count-cura">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'cura')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>Brillantante</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('brillantante', -1)">-1</button>
+                        <b id="count-brillantante">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'brillantante')">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LAVATRICE -->
+            <div class="varie-col">
+                <h3>🧺 Lavatrice</h3>
+                <div class="varie-row">
+                    <span>Pastiglie</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('lavatrice', -1)">-1</button>
+                        <b id="count-lavatrice">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'lavatrice')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>Acchiappacolore</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('acchiappacolore', -1)">-1</button>
+                        <b id="count-acchiappacolore">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'acchiappacolore')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>Ammorbidente</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('ammorbidente', -1)">-1</button>
+                        <b id="count-ammorbidente">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'ammorbidente')">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ALTRO -->
+            <div class="varie-col">
+                <h3>📦 Altro</h3>
+                <div class="varie-row">
+                    <span>🐾 Sabbietta</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('sabbietta', -1)">-1</button>
+                        <b id="count-sabbietta">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'sabbietta')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>🐟 Crocchette</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('crocchette', -1)">-1</button>
+                        <b id="count-crocchette">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'crocchette')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>🧻 Scottex</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('scottex', -1)">-1</button>
+                        <b id="count-scottex">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'scottex')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>🚽 Carta Igienica</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('carta', -1)">-1</button>
+                        <b id="count-carta">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'carta')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>💧 Casse Acqua</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('acqua', -1)">-1</button>
+                        <b id="count-acqua">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'acqua')">+</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div style="text-align: center; margin-top: 28px;">
+            <button onclick="document.getElementById('varie-modal').close()"
+                style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
+                Chiudi
+            </button>
+        </div>
+    </dialog>
+
+    <!-- Indicatore di sincronizzazione -->
+    <div id="sync-status">⏳ Connessione...</div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+    <script>
+        // ---- Firebase config ----
+        const firebaseConfig = {
+            apiKey:            "AIzaSyBGMRtJLJLyJOXI6QQHsf9O2by7nULoF1M",
+            authDomain:        "cheznous-2ce52.firebaseapp.com",
+            projectId:         "cheznous-2ce52",
+            storageBucket:     "cheznous-2ce52.firebasestorage.app",
+            messagingSenderId: "875239720959",
+            appId:             "1:875239720959:web:efaff84a88ee6350c449ca"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const docRef = db.collection('varie').doc('contatori');
+
+        // Stato locale (specchio del documento Firestore)
+        const varieState = {
+            lavastoviglie: 0, sale: 0, cura: 0, brillantante: 0,
+            lavatrice: 0, acchiappacolore: 0, ammorbidente: 0,
+            sabbietta: 0, crocchette: 0, scottex: 0, carta: 0, acqua: 0
+        };
+
+        // ---- Aggiorna UI dai dati Firestore ----
+        function updateUI(data) {
+            for (const key in varieState) {
+                const val = (data && data[key] !== undefined) ? data[key] : 0;
+                varieState[key] = val;
+                const el = document.getElementById('count-' + key);
+                if (el) el.textContent = val;
+            }
+        }
+
+        // ---- Ascolta i cambiamenti in tempo reale ----
+        docRef.onSnapshot(snapshot => {
+            updateUI(snapshot.data());
+            setSyncStatus('✅ Sincronizzato', 2000);
+        }, err => {
+            console.error(err);
+            setSyncStatus('❌ Errore connessione');
+        });
+
+        // ---- Modifica un contatore ----
+        function changeCount(item, amount) {
+            const newVal = Math.max(0, (varieState[item] || 0) + amount);
+            docRef.set({ [item]: newVal }, { merge: true })
+                .then(() => setSyncStatus('✅ Salvato', 2000))
+                .catch(() => setSyncStatus('❌ Errore salvataggio'));
+        }
+
+        // ---- Aggiungi quantità con prompt ----
+        function promptAdd(event, item) {
+            event.stopPropagation();
+            const val = prompt('Quantità da aggiungere (1–99):', '1');
+            if (val === null) return;
+            const num = parseInt(val, 10);
+            if (!isNaN(num) && num >= 1 && num <= 99) {
+                changeCount(item, num);
+            } else {
+                alert('Inserisci un numero valido tra 1 e 99.');
+            }
+        }
+
+        // ---- Apri modal ----
+        function apriVarie() {
+            document.getElementById('varie-modal').showModal();
+        }
+
+        // ---- Indicatore sync ----
+        function setSyncStatus(msg, hideAfterMs) {
+            const el = document.getElementById('sync-status');
+            el.textContent = msg;
+            el.style.opacity = '1';
+            if (hideAfterMs) {
+                setTimeout(() => { el.style.opacity = '0'; }, hideAfterMs);
+            }
+        }
+
+        // ---- Data ----
+        document.addEventListener('DOMContentLoaded', () => {
+            const el = document.getElementById('current-date');
+            const opts = { day: 'numeric', month: 'long', year: 'numeric' };
+            let date = new Date().toLocaleDateString('it-IT', opts);
+            const parts = date.split(' ');
+            if (parts.length === 3) {
+                parts[1] = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+                date = parts.join(' ');
+            }
+            el.textContent = date;
+        });
+    </script>
+</body>
+</html>
