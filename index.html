@@ -302,11 +302,19 @@
                     </div>
                 </div>
                 <div class="varie-row">
-                    <span>🐟 Crocchette</span>
+                    <span>🐟 Crocchette 2.5 kg</span>
                     <div class="varie-controls">
-                        <button class="modal-btn" onclick="changeCount('crocchette', -1)">-1</button>
-                        <b id="count-crocchette">–</b>
-                        <button class="modal-btn" onclick="promptAdd(event, 'crocchette')">+</button>
+                        <button class="modal-btn" onclick="changeCount('crocchette_2_5', -1)">-1</button>
+                        <b id="count-crocchette_2_5">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'crocchette_2_5')">+</button>
+                    </div>
+                </div>
+                <div class="varie-row">
+                    <span>🐟 Crocchette 1.5 kg</span>
+                    <div class="varie-controls">
+                        <button class="modal-btn" onclick="changeCount('crocchette_1_5', -1)">-1</button>
+                        <b id="count-crocchette_1_5">–</b>
+                        <button class="modal-btn" onclick="promptAdd(event, 'crocchette_1_5')">+</button>
                     </div>
                 </div>
                 <div class="varie-row">
@@ -371,7 +379,7 @@
         const varieState = {
             lavastoviglie: 0, sale: 0, cura: 0, brillantante: 0,
             lavatrice: 0, acchiappacolore: 0, ammorbidente: 0,
-            sabbietta: 0, crocchette: 0, scottex: 0, carta: 0, acqua: 0
+            sabbietta: 0, crocchette_2_5: 0, crocchette_1_5: 0, scottex: 0, carta: 0, acqua: 0
         };
 
         // ---- Aggiorna UI dai dati Firestore ----
