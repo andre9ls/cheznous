@@ -210,7 +210,7 @@
             <button class="nav-btn">🍷 Cantina</button>
             <button class="nav-btn">🥫 Dispensa</button>
 
-            <button class="nav-btn">🐈 Muffin</button>
+            <button class="nav-btn" onclick="apriBagno()">🛁 Bagno</button>
             <button class="nav-btn" onclick="apriVarie()">🛠️ Varie</button>
 
             <button class="nav-btn">🍽️ Cene</button>
@@ -353,6 +353,77 @@
         </div>
     </dialog>
 
+    <!-- MODAL BAGNO -->
+    <dialog id="bagno-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 500px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
+        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🛁 Bagno</h2>
+
+        <div style="background: var(--color-beige); border-radius: 16px; padding: 16px; opacity: 0.95;">
+            <div class="varie-row">
+                <span>🧴 Collutorio 0.5 l</span>
+                <div class="varie-controls">
+                    <button class="modal-btn" onclick="changeCount('collutorio_0_5', -1)">-1</button>
+                    <b id="count-collutorio_0_5">–</b>
+                    <button class="modal-btn" onclick="promptAdd(event, 'collutorio_0_5')">+</button>
+                </div>
+            </div>
+            <div class="varie-row">
+                <span>🧴 Collutorio 1.0 l</span>
+                <div class="varie-controls">
+                    <button class="modal-btn" onclick="changeCount('collutorio_1_0', -1)">-1</button>
+                    <b id="count-collutorio_1_0">–</b>
+                    <button class="modal-btn" onclick="promptAdd(event, 'collutorio_1_0')">+</button>
+                </div>
+            </div>
+            <div class="varie-row">
+                <span>🪥 Dentifricio</span>
+                <div class="varie-controls">
+                    <button class="modal-btn" onclick="changeCount('dentifricio', -1)">-1</button>
+                    <b id="count-dentifricio">–</b>
+                    <button class="modal-btn" onclick="promptAdd(event, 'dentifricio')">+</button>
+                </div>
+            </div>
+            <div class="varie-row">
+                <span>🧴 Shampoo</span>
+                <div class="varie-controls">
+                    <button class="modal-btn" onclick="changeCount('shampoo', -1)">-1</button>
+                    <b id="count-shampoo">–</b>
+                    <button class="modal-btn" onclick="promptAdd(event, 'shampoo')">+</button>
+                </div>
+            </div>
+            <div class="varie-row">
+                <span>🧼 Bagnoschiuma</span>
+                <div class="varie-controls">
+                    <button class="modal-btn" onclick="changeCount('bagnoschiuma', -1)">-1</button>
+                    <b id="count-bagnoschiuma">–</b>
+                    <button class="modal-btn" onclick="promptAdd(event, 'bagnoschiuma')">+</button>
+                </div>
+            </div>
+            <div class="varie-row">
+                <span>🫧 Liquido Intimo</span>
+                <div class="varie-controls">
+                    <button class="modal-btn" onclick="changeCount('liquido_intimo', -1)">-1</button>
+                    <b id="count-liquido_intimo">–</b>
+                    <button class="modal-btn" onclick="promptAdd(event, 'liquido_intimo')">+</button>
+                </div>
+            </div>
+            <div class="varie-row" style="border-bottom: none;">
+                <span>✨ Deodorante</span>
+                <div class="varie-controls">
+                    <button class="modal-btn" onclick="changeCount('deodorante', -1)">-1</button>
+                    <b id="count-deodorante">–</b>
+                    <button class="modal-btn" onclick="promptAdd(event, 'deodorante')">+</button>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 28px;">
+            <button onclick="document.getElementById('bagno-modal').close()"
+                style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
+                Chiudi
+            </button>
+        </div>
+    </dialog>
+
     <!-- Indicatore di sincronizzazione -->
     <div id="sync-status">⏳ Connessione...</div>
 
@@ -379,7 +450,9 @@
         const varieState = {
             lavastoviglie: 0, sale: 0, cura: 0, brillantante: 0,
             lavatrice: 0, acchiappacolore: 0, ammorbidente: 0,
-            sabbietta: 0, crocchette_2_5: 0, crocchette_1_5: 0, scottex: 0, carta: 0, acqua: 0
+            sabbietta: 0, crocchette_2_5: 0, crocchette_1_5: 0, scottex: 0, carta: 0, acqua: 0,
+            collutorio_0_5: 0, collutorio_1_0: 0, dentifricio: 0, shampoo: 0,
+            bagnoschiuma: 0, liquido_intimo: 0, deodorante: 0
         };
 
         // ---- Aggiorna UI dai dati Firestore ----
@@ -425,6 +498,10 @@
         // ---- Apri modal ----
         function apriVarie() {
             document.getElementById('varie-modal').showModal();
+        }
+
+        function apriBagno() {
+            document.getElementById('bagno-modal').showModal();
         }
 
         // ---- Indicatore sync ----
