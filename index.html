@@ -190,6 +190,32 @@
             transition: opacity 0.5s;
         }
 
+        .free-text-container {
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .free-text-input {
+            width: 100%;
+            min-height: 70px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.18);
+            background: var(--color-bg);
+            color: var(--color-text);
+            font-size: 0.95rem;
+            font-family: inherit;
+            resize: vertical;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .free-text-input:focus {
+            border-color: #555;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+        }
+
         dialog::backdrop {
             background: rgba(0,0,0,0.4);
         }
@@ -205,10 +231,10 @@
         <div class="section-title" style="margin-top: 0;">Inventario</div>
         <div class="button-grid">
             <button class="nav-btn">🛒 Spesa</button>
-            <button class="nav-btn">❄️ Freezer e Cibo</button>
+            <button class="nav-btn" onclick="apriFreezer()">❄️ Freezer e Cibo</button>
 
-            <button class="nav-btn">🍷 Cantina</button>
-            <button class="nav-btn">🥫 Dispensa</button>
+            <button class="nav-btn" onclick="apriCantina()">🍷 Cantina</button>
+            <button class="nav-btn" onclick="apriDispensa()">🥫 Dispensa</button>
 
             <button class="nav-btn" onclick="apriBagno()">🛁 Bagno</button>
             <button class="nav-btn" onclick="apriVarie()">🛠️ Varie</button>
@@ -345,7 +371,11 @@
 
         </div>
 
-        <div style="text-align: center; margin-top: 28px;">
+        <div class="free-text-container">
+            <textarea id="note_varie" class="free-text-input" placeholder="Note / Note aggiuntive..." oninput="salvaNote('note_varie', this.value)"></textarea>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
             <button onclick="document.getElementById('varie-modal').close()"
                 style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
                 Chiudi
@@ -416,8 +446,60 @@
             </div>
         </div>
 
-        <div style="text-align: center; margin-top: 28px;">
+        <div class="free-text-container">
+            <textarea id="note_bagno" class="free-text-input" placeholder="Note / Note aggiuntive..." oninput="salvaNote('note_bagno', this.value)"></textarea>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
             <button onclick="document.getElementById('bagno-modal').close()"
+                style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
+                Chiudi
+            </button>
+        </div>
+    </dialog>
+
+    <!-- MODAL FREEZER E CIBO -->
+    <dialog id="freezer-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 550px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
+        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">❄️ Freezer e Cibo</h2>
+
+        <div class="free-text-container" style="margin-top: 0;">
+            <textarea id="note_freezer" class="free-text-input" placeholder="Scrivi qui l'elenco e le note per Freezer e Cibo..." oninput="salvaNote('note_freezer', this.value)" style="min-height: 140px;"></textarea>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
+            <button onclick="document.getElementById('freezer-modal').close()"
+                style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
+                Chiudi
+            </button>
+        </div>
+    </dialog>
+
+    <!-- MODAL CANTINA -->
+    <dialog id="cantina-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 550px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
+        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🍷 Cantina</h2>
+
+        <div class="free-text-container" style="margin-top: 0;">
+            <textarea id="note_cantina" class="free-text-input" placeholder="Scrivi qui l'elenco e le note per Cantina..." oninput="salvaNote('note_cantina', this.value)" style="min-height: 140px;"></textarea>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
+            <button onclick="document.getElementById('cantina-modal').close()"
+                style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
+                Chiudi
+            </button>
+        </div>
+    </dialog>
+
+    <!-- MODAL DISPENSA -->
+    <dialog id="dispensa-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 550px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
+        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🥫 Dispensa</h2>
+
+        <div class="free-text-container" style="margin-top: 0;">
+            <textarea id="note_dispensa" class="free-text-input" placeholder="Scrivi qui l'elenco e le note per Dispensa..." oninput="salvaNote('note_dispensa', this.value)" style="min-height: 140px;"></textarea>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
+            <button onclick="document.getElementById('dispensa-modal').close()"
                 style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
                 Chiudi
             </button>
@@ -455,6 +537,8 @@
             bagnoschiuma: 0, liquido_intimo: 0, deodorante: 0
         };
 
+        const noteKeys = ['note_varie', 'note_bagno', 'note_freezer', 'note_cantina', 'note_dispensa'];
+
         // ---- Aggiorna UI dai dati Firestore ----
         function updateUI(data) {
             for (const key in varieState) {
@@ -463,6 +547,23 @@
                 const el = document.getElementById('count-' + key);
                 if (el) el.textContent = val;
             }
+            noteKeys.forEach(k => {
+                const el = document.getElementById(k);
+                if (el && document.activeElement !== el) {
+                    el.value = (data && data[k] !== undefined) ? data[k] : '';
+                }
+            });
+        }
+
+        // ---- Salvataggio note debounced ----
+        const noteTimeouts = {};
+        function salvaNote(key, val) {
+            clearTimeout(noteTimeouts[key]);
+            noteTimeouts[key] = setTimeout(() => {
+                docRef.set({ [key]: val }, { merge: true })
+                    .then(() => setSyncStatus('✅ Salvato', 2000))
+                    .catch(() => setSyncStatus('❌ Errore salvataggio'));
+            }, 600);
         }
 
         // ---- Ascolta i cambiamenti in tempo reale ----
@@ -502,6 +603,18 @@
 
         function apriBagno() {
             document.getElementById('bagno-modal').showModal();
+        }
+
+        function apriFreezer() {
+            document.getElementById('freezer-modal').showModal();
+        }
+
+        function apriCantina() {
+            document.getElementById('cantina-modal').showModal();
+        }
+
+        function apriDispensa() {
+            document.getElementById('dispensa-modal').showModal();
         }
 
         // ---- Indicatore sync ----
