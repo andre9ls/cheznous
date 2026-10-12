@@ -598,11 +598,14 @@
 
         <!-- Card Saldo -->
         <div class="finanze-card">
-            <div style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.75;">Saldo Conto</div>
-            <div id="finanze-saldo" class="finanze-saldo">0,00 €</div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.75;">Saldo Conto</div>
+                <button type="button" onclick="rettificaSaldo()" style="background: none; border: 1px solid rgba(0,0,0,0.15); padding: 3px 8px; border-radius: 8px; font-size: 0.75rem; cursor: pointer; color: var(--color-text);">✏️ Rettifica</button>
+            </div>
+            <div id="finanze-saldo" class="finanze-saldo" style="color: #4a8f5e;">+ 2.101,24 €</div>
             <div class="finanze-subtotals">
-                <span>Entrate: <b id="finanze-tot-entrate" style="color: #4a8f5e;">+0,00 €</b></span>
-                <span>Uscite: <b id="finanze-tot-uscite" style="color: #b54a4a;">-0,00 €</b></span>
+                <span>Entrate: <b id="finanze-tot-entrate" style="color: #4a8f5e;">+ 2.101,24 €</b></span>
+                <span>Uscite: <b id="finanze-tot-uscite" style="color: #b54a4a;">- 0,00 €</b></span>
             </div>
         </div>
 
@@ -794,6 +797,45 @@
             }).join('');
         }
 
+        function rettificaSaldo() {
+            let totEntrate = 0;
+            let totUscite = 0;
+            (finanzeMovimenti || []).forEach(m => {
+                if (m.tipo === 'accredito') totEntrate += m.importo;
+                else totUscite += m.importo;
+            });
+            const saldoAttuale = Math.round((totEntrate - totUscite) * 100) / 100;
+
+            const input = prompt("Inserisci il nuovo saldo reale del conto (€):", saldoAttuale.toFixed(2));
+            if (input === null) return;
+            const nuovoSaldo = parseFloat(input.replace(',', '.'));
+            if (isNaN(nuovoSaldo)) {
+                alert("Inserisci un importo numerico valido.");
+                return;
+            }
+
+            const diff = Math.round((nuovoSaldo - saldoAttuale) * 100) / 100;
+            if (Math.abs(diff) < 0.01) return;
+
+            const ora = new Date();
+            const dataStr = ora.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+            const item = {
+                id: Date.now().toString(),
+                tipo: diff > 0 ? 'accredito' : 'spesa',
+                desc: 'Rettifica saldo',
+                importo: Math.abs(diff),
+                data: dataStr,
+                ts: Date.now()
+            };
+
+            finanzeMovimenti.unshift(item);
+            renderFinanzeUI(finanzeMovimenti);
+            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
+                .then(() => setSyncStatus('✅ Salvato', 2000))
+                .catch(() => setSyncStatus('❌ Errore salvataggio'));
+        }
+
         // ---- Aggiorna UI dai dati Firestore ----
         function updateUI(data) {
             for (const key in varieState) {
@@ -808,7 +850,22 @@
                     el.value = (data && data[k] !== undefined) ? data[k] : '';
                 }
             });
-            finanzeMovimenti = (data && Array.isArray(data.finanze_movimenti)) ? data.finanze_movimenti : [];
+            if (data && Array.isArray(data.finanze_movimenti) && data.finanze_movimenti.length > 0) {
+                finanzeMovimenti = data.finanze_movimenti;
+            } else {
+                // Impostazione saldo iniziale comunicato: 2101,24 €
+                const ora = new Date();
+                const dataStr = ora.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                finanzeMovimenti = [{
+                    id: 'saldo_iniziale',
+                    tipo: 'accredito',
+                    desc: 'Saldo iniziale',
+                    importo: 2101.24,
+                    data: dataStr,
+                    ts: Date.now()
+                }];
+                docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true });
+            }
             renderFinanzeUI(finanzeMovimenti);
         }
 
