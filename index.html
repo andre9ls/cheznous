@@ -216,6 +216,124 @@
             box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
         }
 
+        /* Finanze */
+        .finanze-card {
+            background: var(--color-beige);
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .finanze-saldo {
+            font-size: 2rem;
+            font-weight: 800;
+            margin: 6px 0;
+            letter-spacing: -0.5px;
+        }
+
+        .finanze-subtotals {
+            display: flex;
+            justify-content: space-around;
+            font-size: 0.85rem;
+            opacity: 0.85;
+            margin-top: 8px;
+        }
+
+        .finanze-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: var(--color-beige);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .finanze-row-inputs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .finanze-tipo-toggle {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .finanze-tipo-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(0,0,0,0.15);
+            background: var(--color-bg);
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .finanze-tipo-btn.active.spesa {
+            background: #c95a5a;
+            color: #fff;
+            border-color: #c95a5a;
+        }
+
+        .finanze-tipo-btn.active.accredito {
+            background: #5a9e6f;
+            color: #fff;
+            border-color: #5a9e6f;
+        }
+
+        .finanze-input-field {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(0,0,0,0.18);
+            background: var(--color-bg);
+            font-size: 0.95rem;
+            font-family: inherit;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .finanze-list-container {
+            background: var(--color-beige);
+            border-radius: 16px;
+            padding: 14px 16px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .finanze-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            font-size: 0.9rem;
+        }
+
+        .finanze-item:last-child {
+            border-bottom: none;
+        }
+
+        .finanze-del-btn {
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 6px;
+            line-height: 1;
+            transition: color 0.15s;
+        }
+
+        .finanze-del-btn:hover {
+            color: #c95a5a;
+        }
+
         dialog::backdrop {
             background: rgba(0,0,0,0.4);
         }
@@ -233,7 +351,7 @@
             <button class="nav-btn">🛒 Spesa</button>
             <button class="nav-btn" onclick="apriFreezer()">❄️ Freezer e Cibo</button>
 
-            <button class="nav-btn" onclick="apriCantina()">🍷 Cantina</button>
+            <button class="nav-btn" onclick="apriFinanze()">💶 Finanze</button>
             <button class="nav-btn" onclick="apriDispensa()">🥫 Dispensa</button>
 
             <button class="nav-btn" onclick="apriBagno()">🛁 Bagno</button>
@@ -474,16 +592,46 @@
         </div>
     </dialog>
 
-    <!-- MODAL CANTINA -->
-    <dialog id="cantina-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 550px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
-        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🍷 Cantina</h2>
+    <!-- MODAL FINANZE -->
+    <dialog id="finanze-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 620px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
+        <h2 style="margin-bottom: 20px; text-align: center; font-size: 1.4rem;">💶 Finanze</h2>
 
-        <div class="free-text-container" style="margin-top: 0;">
-            <textarea id="note_cantina" class="free-text-input" placeholder="Scrivi qui l'elenco e le note per Cantina..." oninput="salvaNote('note_cantina', this.value)" style="min-height: 140px;"></textarea>
+        <!-- Card Saldo -->
+        <div class="finanze-card">
+            <div style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.75;">Saldo Conto</div>
+            <div id="finanze-saldo" class="finanze-saldo">0,00 €</div>
+            <div class="finanze-subtotals">
+                <span>Entrate: <b id="finanze-tot-entrate" style="color: #4a8f5e;">+0,00 €</b></span>
+                <span>Uscite: <b id="finanze-tot-uscite" style="color: #b54a4a;">-0,00 €</b></span>
+            </div>
+        </div>
+
+        <!-- Form Inserimento Spesa / Accredito -->
+        <div class="finanze-form">
+            <div class="finanze-tipo-toggle">
+                <button type="button" id="btn-tipo-spesa" class="finanze-tipo-btn active spesa" onclick="setFinanzeTipo('spesa')">🔴 Spesa (-)</button>
+                <button type="button" id="btn-tipo-accredito" class="finanze-tipo-btn" onclick="setFinanzeTipo('accredito')">🟢 Accredito (+)</button>
+            </div>
+            <div class="finanze-row-inputs">
+                <input type="text" id="finanze-desc" placeholder="Descrizione (es. Spesa Conad, Stipendio...)" class="finanze-input-field" style="flex: 2; min-width: 160px;">
+                <input type="number" id="finanze-importo" step="0.01" min="0.01" placeholder="Importo (€)" class="finanze-input-field" style="flex: 1; min-width: 100px;">
+                <button type="button" onclick="aggiungiTransazione()" class="modal-btn" style="width: auto; padding: 0 18px; height: 42px; border-radius: 10px;">Aggiungi</button>
+            </div>
+        </div>
+
+        <!-- Lista Transazioni -->
+        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Ultimi Movimenti:</div>
+        <div class="finanze-list-container" id="finanze-lista">
+            <div style="text-align: center; color: #777; font-size: 0.9rem; padding: 12px 0;">Nessun movimento registrato</div>
+        </div>
+
+        <!-- Free Text Note -->
+        <div class="free-text-container">
+            <textarea id="note_finanze" class="free-text-input" placeholder="Note / Promemoria Finanze..." oninput="salvaNote('note_finanze', this.value)"></textarea>
         </div>
 
         <div style="text-align: center; margin-top: 24px;">
-            <button onclick="document.getElementById('cantina-modal').close()"
+            <button onclick="document.getElementById('finanze-modal').close()"
                 style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
                 Chiudi
             </button>
@@ -537,7 +685,114 @@
             bagnoschiuma: 0, liquido_intimo: 0, deodorante: 0
         };
 
-        const noteKeys = ['note_varie', 'note_bagno', 'note_freezer', 'note_cantina', 'note_dispensa'];
+        const noteKeys = ['note_varie', 'note_bagno', 'note_freezer', 'note_dispensa', 'note_finanze'];
+
+        // ---- Finanze State & Logic ----
+        let finanzeMovimenti = [];
+        let currentFinanzeTipo = 'spesa';
+
+        function setFinanzeTipo(tipo) {
+            currentFinanzeTipo = tipo;
+            const btnSpesa = document.getElementById('btn-tipo-spesa');
+            const btnAccredito = document.getElementById('btn-tipo-accredito');
+            if (tipo === 'spesa') {
+                btnSpesa.className = 'finanze-tipo-btn active spesa';
+                btnAccredito.className = 'finanze-tipo-btn';
+            } else {
+                btnSpesa.className = 'finanze-tipo-btn';
+                btnAccredito.className = 'finanze-tipo-btn active accredito';
+            }
+        }
+
+        function aggiungiTransazione() {
+            const descEl = document.getElementById('finanze-desc');
+            const impEl = document.getElementById('finanze-importo');
+            const desc = (descEl.value || '').trim();
+            const val = parseFloat(impEl.value);
+
+            if (isNaN(val) || val <= 0) {
+                alert('Inserisci un importo valido maggiore di zero.');
+                return;
+            }
+
+            const ora = new Date();
+            const dataStr = ora.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const item = {
+                id: Date.now().toString(),
+                tipo: currentFinanzeTipo,
+                desc: desc || (currentFinanzeTipo === 'spesa' ? 'Spesa' : 'Accredito'),
+                importo: Math.round(val * 100) / 100,
+                data: dataStr,
+                ts: Date.now()
+            };
+
+            finanzeMovimenti.unshift(item);
+            descEl.value = '';
+            impEl.value = '';
+
+            renderFinanzeUI(finanzeMovimenti);
+
+            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
+                .then(() => setSyncStatus('✅ Salvato', 2000))
+                .catch(() => setSyncStatus('❌ Errore salvataggio'));
+        }
+
+        function eliminaTransazione(id) {
+            if (!confirm('Eliminare questo movimento?')) return;
+            finanzeMovimenti = finanzeMovimenti.filter(m => m.id !== id);
+            renderFinanzeUI(finanzeMovimenti);
+            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
+                .then(() => setSyncStatus('✅ Salvato', 2000))
+                .catch(() => setSyncStatus('❌ Errore salvataggio'));
+        }
+
+        function renderFinanzeUI(movimenti) {
+            const saldoEl = document.getElementById('finanze-saldo');
+            const entrateEl = document.getElementById('finanze-tot-entrate');
+            const usciteEl = document.getElementById('finanze-tot-uscite');
+            const listaEl = document.getElementById('finanze-lista');
+
+            if (!saldoEl || !listaEl) return;
+
+            let totEntrate = 0;
+            let totUscite = 0;
+            (movimenti || []).forEach(m => {
+                if (m.tipo === 'accredito') totEntrate += m.importo;
+                else totUscite += m.importo;
+            });
+
+            const saldo = totEntrate - totUscite;
+
+            saldoEl.textContent = (saldo >= 0 ? '+ ' : '- ') + Math.abs(saldo).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            saldoEl.style.color = saldo >= 0 ? '#4a8f5e' : '#b54a4a';
+
+            entrateEl.textContent = '+ ' + totEntrate.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            usciteEl.textContent = '- ' + totUscite.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+
+            if (!movimenti || movimenti.length === 0) {
+                listaEl.innerHTML = '<div style="text-align: center; color: #777; font-size: 0.9rem; padding: 12px 0;">Nessun movimento registrato</div>';
+                return;
+            }
+
+            listaEl.innerHTML = movimenti.map(m => {
+                const isAcc = m.tipo === 'accredito';
+                const col = isAcc ? '#4a8f5e' : '#b54a4a';
+                const sgn = isAcc ? '+' : '-';
+                const impFmt = m.importo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                return `
+                    <div class="finanze-item">
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-weight: 600;">${m.desc}</span>
+                            <span style="font-size: 0.75rem; opacity: 0.65;">${m.data}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <b style="color: ${col}; font-size: 1rem;">${sgn} ${impFmt} €</b>
+                            <button class="finanze-del-btn" title="Elimina" onclick="eliminaTransazione('${m.id}')">✕</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
 
         // ---- Aggiorna UI dai dati Firestore ----
         function updateUI(data) {
@@ -553,6 +808,8 @@
                     el.value = (data && data[k] !== undefined) ? data[k] : '';
                 }
             });
+            finanzeMovimenti = (data && Array.isArray(data.finanze_movimenti)) ? data.finanze_movimenti : [];
+            renderFinanzeUI(finanzeMovimenti);
         }
 
         // ---- Salvataggio note debounced ----
@@ -609,8 +866,8 @@
             document.getElementById('freezer-modal').showModal();
         }
 
-        function apriCantina() {
-            document.getElementById('cantina-modal').showModal();
+        function apriFinanze() {
+            document.getElementById('finanze-modal').showModal();
         }
 
         function apriDispensa() {
