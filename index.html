@@ -348,7 +348,7 @@
     <main>
         <div class="section-title" style="margin-top: 0;">Inventario</div>
         <div class="button-grid">
-            <button class="nav-btn">🛒 Spesa</button>
+            <button class="nav-btn" onclick="apriSpesa()">🛒 Spesa</button>
             <button class="nav-btn" onclick="apriFreezer()">❄️ Freezer e Cibo</button>
 
             <button class="nav-btn" onclick="apriFinanze()">💶 Finanze</button>
@@ -657,6 +657,44 @@
         </div>
     </dialog>
 
+    <!-- MODAL SPESA -->
+    <dialog id="spesa-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 820px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
+        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🛒 Spesa</h2>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+            <!-- GENERALE -->
+            <div style="background: var(--color-beige); border-radius: 16px; padding: 16px;">
+                <h3 style="text-align: center; font-size: 1.05rem; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.12);">📋 Generale</h3>
+                <textarea id="spesa_generale" class="free-text-input" placeholder="Aggiungi articoli per la spesa generale..." oninput="salvaNote('spesa_generale', this.value)" style="min-height: 150px;"></textarea>
+            </div>
+
+            <!-- ESSELUNGA -->
+            <div style="background: var(--color-beige); border-radius: 16px; padding: 16px;">
+                <h3 style="text-align: center; font-size: 1.05rem; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.12);">🛒 Esselunga</h3>
+                <textarea id="spesa_esselunga" class="free-text-input" placeholder="Aggiungi articoli per Esselunga..." oninput="salvaNote('spesa_esselunga', this.value)" style="min-height: 150px;"></textarea>
+            </div>
+
+            <!-- LIDL -->
+            <div style="background: var(--color-beige); border-radius: 16px; padding: 16px;">
+                <h3 style="text-align: center; font-size: 1.05rem; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.12);">🛍️ Lidl</h3>
+                <textarea id="spesa_lidl" class="free-text-input" placeholder="Aggiungi articoli per Lidl..." oninput="salvaNote('spesa_lidl', this.value)" style="min-height: 150px;"></textarea>
+            </div>
+
+            <!-- IPERCOOP -->
+            <div style="background: var(--color-beige); border-radius: 16px; padding: 16px;">
+                <h3 style="text-align: center; font-size: 1.05rem; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.12);">🏪 Ipercoop</h3>
+                <textarea id="spesa_ipercoop" class="free-text-input" placeholder="Aggiungi articoli per Ipercoop..." oninput="salvaNote('spesa_ipercoop', this.value)" style="min-height: 150px;"></textarea>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 24px;">
+            <button onclick="document.getElementById('spesa-modal').close()"
+                style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
+                Chiudi
+            </button>
+        </div>
+    </dialog>
+
     <!-- Indicatore di sincronizzazione -->
     <div id="sync-status">⏳ Connessione...</div>
 
@@ -688,7 +726,10 @@
             bagnoschiuma: 0, liquido_intimo: 0, deodorante: 0
         };
 
-        const noteKeys = ['note_varie', 'note_bagno', 'note_freezer', 'note_dispensa', 'note_finanze'];
+        const noteKeys = [
+            'note_varie', 'note_bagno', 'note_freezer', 'note_dispensa', 'note_finanze',
+            'spesa_generale', 'spesa_esselunga', 'spesa_lidl', 'spesa_ipercoop'
+        ];
 
         // ---- Finanze State & Logic ----
         let finanzeMovimenti = [];
@@ -929,6 +970,10 @@
 
         function apriDispensa() {
             document.getElementById('dispensa-modal').showModal();
+        }
+
+        function apriSpesa() {
+            document.getElementById('spesa-modal').showModal();
         }
 
         // ---- Indicatore sync ----
