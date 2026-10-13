@@ -352,7 +352,7 @@
             <button class="nav-btn" onclick="apriFreezer()">❄️ Freezer e Cibo</button>
 
             <button class="nav-btn" onclick="apriFinanze()">💶 Finanze</button>
-            <button class="nav-btn" onclick="apriDispensa()">🥫 Dispensa</button>
+            <button class="nav-btn" onclick="apriBevande()">🥤 Bevande</button>
 
             <button class="nav-btn" onclick="apriBagno()">🛁 Bagno</button>
             <button class="nav-btn" onclick="apriVarie()">🛠️ Varie</button>
@@ -641,16 +641,16 @@
         </div>
     </dialog>
 
-    <!-- MODAL DISPENSA -->
-    <dialog id="dispensa-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 550px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
-        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🥫 Dispensa</h2>
+    <!-- MODAL BEVANDE -->
+    <dialog id="bevande-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 550px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
+        <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🥤 Bevande</h2>
 
         <div class="free-text-container" style="margin-top: 0;">
-            <textarea id="note_dispensa" class="free-text-input" placeholder="Scrivi qui l'elenco e le note per Dispensa..." oninput="salvaNote('note_dispensa', this.value)" style="min-height: 140px;"></textarea>
+            <textarea id="note_bevande" class="free-text-input" placeholder="Scrivi qui l'elenco e le note per Bevande..." oninput="salvaNote('note_bevande', this.value)" style="min-height: 140px;"></textarea>
         </div>
 
         <div style="text-align: center; margin-top: 24px;">
-            <button onclick="document.getElementById('dispensa-modal').close()"
+            <button onclick="document.getElementById('bevande-modal').close()"
                 style="padding: 12px 32px; border-radius: 24px; border: none; background-color: var(--color-green); opacity: 0.85; font-weight: bold; font-size: 1rem; cursor: pointer; color: var(--color-text);">
                 Chiudi
             </button>
@@ -727,7 +727,7 @@
         };
 
         const noteKeys = [
-            'note_varie', 'note_bagno', 'note_freezer', 'note_dispensa', 'note_finanze',
+            'note_varie', 'note_bagno', 'note_freezer', 'note_bevande', 'note_dispensa', 'note_finanze',
             'spesa_generale', 'spesa_esselunga', 'spesa_lidl', 'spesa_ipercoop'
         ];
 
@@ -968,8 +968,8 @@
             document.getElementById('finanze-modal').showModal();
         }
 
-        function apriDispensa() {
-            document.getElementById('dispensa-modal').showModal();
+        function apriBevande() {
+            document.getElementById('bevande-modal').showModal();
         }
 
         function apriSpesa() {
