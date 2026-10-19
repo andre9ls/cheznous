@@ -790,34 +790,6 @@
                 .catch(() => setSyncStatus('❌ Errore salvataggio'));
         }
 
-        function modificaTransazione(id) {
-            const m = finanzeMovimenti.find(x => x.id === id);
-            if (!m) return;
-
-            const nuovaDesc = prompt('Descrizione:', m.desc);
-            if (nuovaDesc === null) return;
-
-            const nuovoImportoRaw = prompt('Importo (€):', m.importo.toFixed(2));
-            if (nuovoImportoRaw === null) return;
-            const nuovoImporto = parseFloat(nuovoImportoRaw.replace(',', '.'));
-            if (isNaN(nuovoImporto) || nuovoImporto <= 0) { alert('Importo non valido.'); return; }
-
-            const tipoRisposta = prompt('Tipo (s = Spesa, a = Accredito):', m.tipo === 'spesa' ? 's' : 'a');
-            if (tipoRisposta === null) return;
-            const nuovoTipo = tipoRisposta.trim().toLowerCase() === 'a' ? 'accredito' : 'spesa';
-
-            finanzeMovimenti = finanzeMovimenti.map(x =>
-                x.id === id
-                    ? { ...x, desc: nuovaDesc.trim() || x.desc, importo: Math.round(nuovoImporto * 100) / 100, tipo: nuovoTipo }
-                    : x
-            );
-
-            renderFinanzeUI(finanzeMovimenti);
-            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
-                .then(() => setSyncStatus('✅ Salvato', 2000))
-                .catch(() => setSyncStatus('❌ Errore salvataggio'));
-        }
-
         function renderFinanzeUI(movimenti) {
             const saldoEl = document.getElementById('finanze-saldo');
             const entrateEl = document.getElementById('finanze-tot-entrate');
@@ -852,19 +824,73 @@
                 const sgn = isAcc ? '+' : '-';
                 const impFmt = m.importo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 return `
-                    <div class="finanze-item">
-                        <div style="display: flex; flex-direction: column;">
+                    <div class="finanze-item" id="row-${m.id}">
+                        <div style="display: flex; flex-direction: column; flex: 1;">
                             <span style="font-weight: 600;">${m.desc}</span>
                             <span style="font-size: 0.75rem; opacity: 0.65;">${m.data}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <b style="color: ${col}; font-size: 1rem;">${sgn} ${impFmt} €</b>
-                            <button class="finanze-del-btn" title="Modifica" onclick="modificaTransazione('${m.id}')">✏️</button>
+                            <button class="finanze-del-btn" title="Modifica" onclick="apriEditRow('${m.id}')">✏️</button>
                             <button class="finanze-del-btn" title="Elimina" onclick="eliminaTransazione('${m.id}')">✕</button>
                         </div>
                     </div>
                 `;
             }).join('');
+        }
+
+        function apriEditRow(id) {
+            const m = finanzeMovimenti.find(x => x.id === id);
+            if (!m) return;
+            const row = document.getElementById('row-' + id);
+            if (!row) return;
+            const impVal = m.importo.toFixed(2).replace('.', ',');
+            const isAcc = m.tipo === 'accredito';
+            row.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+                    <input id="edit-desc-${id}" type="text" value="${m.desc.replace(/"/g, '&quot;')}"
+                        style="border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 0.9rem; width: 100%; box-sizing: border-box;" />
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input id="edit-imp-${id}" type="text" inputmode="decimal" value="${impVal}"
+                            style="border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 0.9rem; width: 100px;" />
+                        <span style="font-size: 0.85rem;">€</span>
+                        <select id="edit-tipo-${id}" style="border: 1px solid #ccc; border-radius: 6px; padding: 4px 6px; font-size: 0.85rem;">
+                            <option value="spesa" ${!isAcc ? 'selected' : ''}>Spesa</option>
+                            <option value="accredito" ${isAcc ? 'selected' : ''}>Accredito</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-left: 10px;">
+                    <button class="finanze-del-btn" style="background:#4a8f5e;color:#fff;" onclick="salvaEditRow('${id}')">✔</button>
+                    <button class="finanze-del-btn" onclick="renderFinanzeUI(finanzeMovimenti)">✕</button>
+                </div>
+            `;
+            document.getElementById('edit-desc-' + id).focus();
+        }
+
+        function salvaEditRow(id) {
+            const descEl = document.getElementById('edit-desc-' + id);
+            const impEl  = document.getElementById('edit-imp-'  + id);
+            const tipoEl = document.getElementById('edit-tipo-' + id);
+            if (!descEl || !impEl || !tipoEl) return;
+
+            const nuovaDesc = descEl.value.trim();
+            const nuovoImporto = parseFloat(impEl.value.replace(',', '.'));
+            const nuovoTipo = tipoEl.value;
+
+            if (!nuovaDesc) { alert('La descrizione non può essere vuota.'); return; }
+            if (isNaN(nuovoImporto) || nuovoImporto <= 0) { alert('Importo non valido.'); return; }
+
+            finanzeMovimenti = finanzeMovimenti.map(x =>
+                x.id === id
+                    ? { ...x, desc: nuovaDesc, importo: Math.round(nuovoImporto * 100) / 100, tipo: nuovoTipo }
+                    : x
+            );
+
+            renderFinanzeUI(finanzeMovimenti);
+            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
+                .then(() => setSyncStatus('✅ Salvato', 2000))
+                .catch(() => setSyncStatus('❌ Errore salvataggio'));
         }
 
         function rettificaSaldo() {
