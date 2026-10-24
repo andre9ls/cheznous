@@ -757,6 +757,11 @@
             </div>
         </div>
 
+        <div class="finanze-card" style="margin-bottom: 20px;">
+            <button type="button" id="finanze-verifica-btn" class="finanze-tipo-btn" style="width: 100%; background: var(--color-green);" onclick="confermaSaldoBanca()" disabled>✅ Il saldo coincide con la banca</button>
+            <p id="finanze-ultima-verifica" role="status" style="font-size: 0.85rem; line-height: 1.5; margin-top: 12px;">In attesa dei dati…</p>
+        </div>
+
         <!-- Form Inserimento Spesa / Accredito -->
         <div class="finanze-form">
             <div class="finanze-tipo-toggle">
@@ -939,6 +944,63 @@
         // ---- Finanze State & Logic ----
         let finanzeMovimenti = [];
         let currentFinanzeTipo = 'spesa';
+        let finanzeVerifica = null;
+        let finanzeCaricate = false;
+        let verificaInCorso = false;
+
+        function saldoInCentesimi(movimenti) {
+            return (movimenti || []).reduce((saldo, movimento) => saldo +
+                (movimento.tipo === 'accredito' ? 1 : -1) * Math.round(Number(movimento.importo) * 100), 0);
+        }
+
+        function renderVerificaSaldo() {
+            const button = document.getElementById('finanze-verifica-btn');
+            const status = document.getElementById('finanze-ultima-verifica');
+            button.disabled = !finanzeCaricate || verificaInCorso;
+            button.textContent = verificaInCorso ? 'Salvataggio verifica…' : '✅ Il saldo coincide con la banca';
+            const date = finanzeVerifica?.data?.toDate?.();
+            if (!date) {
+                status.textContent = finanzeCaricate
+                    ? 'Nessuna verifica registrata. Premi il tasto dopo aver confrontato il saldo con l’app della banca.'
+                    : 'In attesa dei dati…';
+                return;
+            }
+            const saldo = (finanzeVerifica.saldoCentesimi / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+            status.textContent = 'Ultima verifica: ' + date.toLocaleString('it-IT', {
+                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            }) + ' · Saldo confermato: ' + saldo + '.';
+            if (saldoInCentesimi(finanzeMovimenti) !== finanzeVerifica.saldoCentesimi) {
+                status.textContent += ' Il saldo è cambiato dopo quella verifica.';
+            }
+        }
+
+        async function confermaSaldoBanca() {
+            if (!finanzeCaricate || verificaInCorso) return;
+            const saldoConfermato = saldoInCentesimi(finanzeMovimenti);
+            verificaInCorso = true;
+            renderVerificaSaldo();
+            try {
+                await db.runTransaction(async transaction => {
+                    const snapshot = await transaction.get(docRef);
+                    const movimenti = snapshot.data()?.finanze_movimenti;
+                    if (!Array.isArray(movimenti) || saldoInCentesimi(movimenti) !== saldoConfermato) {
+                        throw new Error('saldo-cambiato');
+                    }
+                    transaction.set(docRef, { finanze_verifica: {
+                        data: firebase.firestore.FieldValue.serverTimestamp(),
+                        saldoCentesimi: saldoConfermato
+                    } }, { merge: true });
+                });
+                setSyncStatus('✅ Verifica saldo salvata', 3000);
+            } catch (error) {
+                alert(error.message === 'saldo-cambiato'
+                    ? 'Il saldo è cambiato durante la verifica. Confrontalo nuovamente con quello della banca.'
+                    : 'Verifica non salvata. Controlla la connessione e riprova.');
+            } finally {
+                verificaInCorso = false;
+                renderVerificaSaldo();
+            }
+        }
 
         function setFinanzeTipo(tipo) {
             currentFinanzeTipo = tipo;
@@ -1011,6 +1073,7 @@
             });
 
             const saldo = totEntrate - totUscite;
+            renderVerificaSaldo();
 
             saldoEl.textContent = (saldo >= 0 ? '+ ' : '- ') + Math.abs(saldo).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
             saldoEl.style.color = saldo >= 0 ? '#4a8f5e' : '#b54a4a';
@@ -1140,6 +1203,8 @@
         // ---- Aggiorna UI dai dati Firestore ----
         function updateUI(data) {
             statsState = data?.consumi_stats || null;
+            finanzeVerifica = data?.finanze_verifica || null;
+            finanzeCaricate = Array.isArray(data?.finanze_movimenti);
             for (const key in varieState) {
                 const val = (data && data[key] !== undefined) ? data[key] : 0;
                 varieState[key] = val;
