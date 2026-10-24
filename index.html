@@ -355,6 +355,97 @@
             color: #c95a5a;
         }
 
+        /* ---- Cerca contatori ---- */
+        #cerca-bar {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto 20px auto;
+            position: relative;
+        }
+
+        #cerca-input {
+            width: 100%;
+            padding: 14px 48px 14px 18px;
+            border-radius: 24px;
+            border: none;
+            font-size: 1rem;
+            background: rgba(255,255,255,0.75);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+            color: var(--color-text);
+            outline: none;
+        }
+
+        #cerca-input::placeholder { color: #888; }
+
+        #cerca-icon {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+            pointer-events: none;
+        }
+
+        #cerca-risultati {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            z-index: 9999;
+            overflow: hidden;
+            display: none;
+        }
+
+        .cerca-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 18px;
+            gap: 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.07);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .cerca-item:last-child { border-bottom: none; }
+        .cerca-item:hover { background: var(--color-beige); }
+
+        .cerca-item-label { font-size: 0.95rem; flex: 1; }
+        .cerca-item-badge {
+            font-size: 0.75rem;
+            background: var(--color-green);
+            border-radius: 20px;
+            padding: 2px 10px;
+            opacity: 0.75;
+            white-space: nowrap;
+        }
+
+        .cerca-item-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cerca-item-controls button {
+            border: 1px solid #ccc;
+            background: #fff;
+            border-radius: 8px;
+            width: 30px;
+            height: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .cerca-item-controls button:active { background: #eee; }
+        .cerca-item-count { font-weight: bold; min-width: 20px; text-align: center; }
+
         dialog::backdrop {
             background: rgba(0,0,0,0.4);
         }
@@ -365,6 +456,13 @@
     <header>
         <h1>Via Napione 21 Bis, <span id="current-date"></span></h1>
     </header>
+
+    <!-- CERCA CONTATORI -->
+    <div id="cerca-bar">
+        <input id="cerca-input" type="search" placeholder="🔍  Cerca contatore..." oninput="cercaContatore(this.value)" onfocus="cercaContatore(this.value)" autocomplete="off" />
+        <span id="cerca-icon">🔍</span>
+        <div id="cerca-risultati"></div>
+    </div>
 
     <main>
         <div class="section-title" style="margin-top: 0;">Inventario</div>
@@ -984,6 +1082,14 @@
                 docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true });
             }
             renderFinanzeUI(finanzeMovimenti);
+            // Aggiorna conteggi nei risultati di ricerca se visibili
+            const cercaEl = document.getElementById('cerca-input');
+            if (cercaEl && cercaEl.value.trim()) {
+                CONTATORI_CERCA.forEach(c => {
+                    const el = document.getElementById('cerca-count-' + c.key);
+                    if (el) el.textContent = varieState[c.key] !== undefined ? varieState[c.key] : '–';
+                });
+            }
         }
 
         // ---- Salvataggio note debounced ----
@@ -1074,6 +1180,74 @@
             }
             el.textContent = date;
         });
+        // ---- CERCA CONTATORI ----
+        const CONTATORI_CERCA = [
+            // Varie > Lavastoviglie
+            { label: '🧼 Pastiglie Lavastoviglie', key: 'lavastoviglie',   sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '🧼 Sale (lavastoviglie)',     key: 'sale',            sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '🧼 Cura Lavastoviglie',       key: 'cura',            sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '✨ Brillantante',             key: 'brillantante',    sezione: '🛠️ Varie', apri: apriVarie },
+            // Varie > Lavatrice
+            { label: '🧺 Pastiglie Lavatrice',      key: 'lavatrice',       sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '🧺 Acchiappacolore',          key: 'acchiappacolore', sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '🧺 Ammorbidente',             key: 'ammorbidente',    sezione: '🛠️ Varie', apri: apriVarie },
+            // Varie > Altro
+            { label: '🐾 Sabbietta',                key: 'sabbietta',       sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '🐟 Crocchette 2.5 kg',        key: 'crocchette_2_5',  sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '🐟 Crocchette 1.5 kg',        key: 'crocchette_1_5',  sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '🧻 Scottex',                  key: 'scottex',         sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '🚽 Carta Igienica',           key: 'carta',           sezione: '🛠️ Varie', apri: apriVarie },
+            { label: '💧 Casse Acqua',              key: 'acqua',           sezione: '🛠️ Varie', apri: apriVarie },
+            // Bagno
+            { label: '🧴 Collutorio 0.5 l',        key: 'collutorio_0_5',  sezione: '🛁 Bagno',  apri: apriBagno },
+            { label: '🧴 Collutorio 1.0 l',        key: 'collutorio_1_0',  sezione: '🛁 Bagno',  apri: apriBagno },
+            { label: '🪥 Dentifricio',              key: 'dentifricio',     sezione: '🛁 Bagno',  apri: apriBagno },
+            { label: '🧴 Shampoo',                  key: 'shampoo',         sezione: '🛁 Bagno',  apri: apriBagno },
+            { label: '🧼 Bagnoschiuma',             key: 'bagnoschiuma',    sezione: '🛁 Bagno',  apri: apriBagno },
+            { label: '🫧 Liquido Intimo',           key: 'liquido_intimo',  sezione: '🛁 Bagno',  apri: apriBagno },
+            { label: '✨ Deodorante',               key: 'deodorante',      sezione: '🛁 Bagno',  apri: apriBagno },
+        ];
+
+        function cercaContatore(query) {
+            const el = document.getElementById('cerca-risultati');
+            query = query.trim().toLowerCase();
+            if (!query) { el.style.display = 'none'; return; }
+
+            const matches = CONTATORI_CERCA.filter(c =>
+                c.label.toLowerCase().includes(query) ||
+                c.key.toLowerCase().includes(query) ||
+                c.sezione.toLowerCase().includes(query)
+            );
+
+            if (matches.length === 0) {
+                el.innerHTML = '<div style="padding:14px 18px;color:#888;font-size:0.9rem;">Nessun risultato</div>';
+            } else {
+                el.innerHTML = matches.map(c => {
+                    const count = (varieState && varieState[c.key] !== undefined) ? varieState[c.key] : '–';
+                    return `
+                        <div class="cerca-item">
+                            <span class="cerca-item-label">${c.label}</span>
+                            <span class="cerca-item-badge">${c.sezione}</span>
+                            <div class="cerca-item-controls">
+                                <button onclick="changeCount('${c.key}', -1); setTimeout(()=>cercaContatore(document.getElementById('cerca-input').value),100)">-1</button>
+                                <span class="cerca-item-count" id="cerca-count-${c.key}">${count}</span>
+                                <button onclick="promptAdd(event, '${c.key}'); setTimeout(()=>cercaContatore(document.getElementById('cerca-input').value),300)">+</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            el.style.display = 'block';
+        }
+
+        // Chiudi risultati se si clicca fuori
+        document.addEventListener('click', function(e) {
+            const bar = document.getElementById('cerca-bar');
+            if (bar && !bar.contains(e.target)) {
+                document.getElementById('cerca-risultati').style.display = 'none';
+            }
+        });
+
     </script>
 </body>
 </html>
