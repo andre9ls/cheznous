@@ -129,6 +129,18 @@
             text-shadow: 0 1px 4px rgba(255, 255, 255, 0.7);
         }
 
+        .stats-dialog { padding: 24px; border: none; border-radius: 20px; width: 95%; max-width: 1000px; max-height: 90vh; margin: auto; background: var(--color-bg); }
+        .stats-dialog h2 { text-align: center; margin-bottom: 16px; }
+        .stats-dialog p { line-height: 1.5; margin: 12px 0; }
+        .stats-table-wrap { overflow-x: auto; margin: 16px 0; }
+        .stats-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+        .stats-table th, .stats-table td { padding: 12px 10px; text-align: right; border-bottom: 1px solid #ddd; }
+        .stats-table th:first-child, .stats-table td:first-child { text-align: left; min-width: 180px; }
+        .stats-table th { background: var(--color-beige); }
+        .stats-table caption { text-align: left; font-size: 1.1rem; font-weight: 700; padding: 12px 0; }
+        .stats-buy { font-weight: 700; color: #664419; }
+        .stats-close { display: block; margin: 20px auto 0; padding: 12px 28px; border: none; border-radius: 12px; background: var(--color-beige); font-size: 1rem; cursor: pointer; }
+
         /* ---- Modal ---- */
         .modal-btn {
             background-color: var(--color-bg);
@@ -484,8 +496,19 @@
 
             <button class="nav-btn">🍽️ Cene</button>
             <button class="nav-btn">🪴 Piante</button>
+            <button class="nav-btn" onclick="apriStats()">📊 Stats</button>
         </div>
     </main>
+
+    <dialog id="stats-modal" class="stats-dialog" aria-labelledby="stats-title">
+        <h2 id="stats-title">📊 Stats</h2>
+        <p>Consumi di Bagno e Varie per pianificare gli acquisti.</p>
+        <p id="stats-period" role="status">In attesa dei dati…</p>
+        <p>Le medie includono tutti i giorni dal primo monitoraggio, anche quelli senza consumi. Ogni −1 conta come un’unità consumata; le aggiunte riforniscono le scorte. Le unità corrispondono a quelle dei contatori.</p>
+        <div id="stats-content"></div>
+        <p>Le stime diventano disponibili dopo almeno 24 ore. “Da acquistare” indica le unità mancanti per coprire i prossimi 30 giorni alla media attuale, arrotondate per eccesso. L’autonomia presuppone consumi costanti.</p>
+        <button class="stats-close" onclick="document.getElementById('stats-modal').close()">Chiudi</button>
+    </dialog>
 
     <!-- MODAL VARIE -->
     <dialog id="varie-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 820px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
@@ -842,6 +865,63 @@
         const db = firebase.firestore();
         const docRef = db.collection('varie').doc('contatori');
 
+        let statsState = null;
+        let statsInitPending = false;
+
+        function avviaMonitoraggio() {
+            if (statsState || statsInitPending) return;
+            statsInitPending = true;
+            db.runTransaction(async transaction => {
+                const snapshot = await transaction.get(docRef);
+                if (!snapshot.data()?.consumi_stats) {
+                    transaction.set(docRef, { consumi_stats: {
+                        startedAt: firebase.firestore.FieldValue.serverTimestamp(), consumed: {}
+                    } }, { merge: true });
+                }
+            }).catch(() => setSyncStatus('❌ Errore avvio statistiche'))
+                .finally(() => { statsInitPending = false; });
+        }
+
+        function apriStats() {
+            renderStats();
+            document.getElementById('stats-modal').showModal();
+            avviaMonitoraggio();
+        }
+
+        function calcolaStats(stock, consumed, days) {
+            const ready = days >= 1;
+            const daily = ready ? consumed / days : 0;
+            return { ready, weekly: daily * 7, monthly: daily * 30,
+                autonomy: daily > 0 ? stock / daily : null,
+                buy: daily > 0 ? Math.max(0, Math.ceil(daily * 30 - stock)) : null };
+        }
+
+        function renderStats() {
+            const start = statsState?.startedAt?.toMillis?.();
+            const days = start ? Math.max(0, (Date.now() - start) / 86400000) : 0;
+            const format = value => value.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+            document.getElementById('stats-period').textContent = start
+                ? 'Monitoraggio dal ' + new Date(start).toLocaleDateString('it-IT') +
+                    ' · ' + format(days) + ' giorni osservati.' + (days < 1 ? ' Raccolta dei primi dati in corso.' : '')
+                : 'In attesa del monitoraggio sincronizzato. I consumi precedenti non sono disponibili.';
+            document.getElementById('stats-content').innerHTML = ['🛁 Bagno', '🛠️ Varie'].map(section => {
+                const rows = CONTATORI_CERCA.filter(item => item.sezione === section).map(item => {
+                    const stock = varieState[item.key] || 0;
+                    const consumed = statsState?.consumed?.[item.key] || 0;
+                    const stats = calcolaStats(stock, consumed, days);
+                    return `<tr><td>${item.label}</td><td>${stock}</td><td>${consumed}</td>
+                        <td>${stats.ready ? format(stats.weekly) : '—'}</td>
+                        <td>${stats.ready ? format(stats.monthly) : '—'}</td>
+                        <td>${stock === 0 ? 'Esaurito' : stats.autonomy === null ? '—' : format(stats.autonomy) + ' giorni'}</td>
+                        <td class="stats-buy">${stats.buy === null ? '—' : stats.buy}</td></tr>`;
+                }).join('');
+                return `<div class="stats-table-wrap"><table class="stats-table"><caption>${section}</caption>
+                    <thead><tr><th scope="col">Prodotto</th><th scope="col">Scorte</th><th scope="col">Consumati</th>
+                    <th scope="col">Media / 7 gg</th><th scope="col">Media / 30 gg</th><th scope="col">Autonomia</th>
+                    <th scope="col">Da acquistare / 30 gg</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+            }).join('');
+        }
+
         // Stato locale (specchio del documento Firestore)
         const varieState = {
             lavastoviglie: 0, sale: 0, cura: 0, brillantante: 0,
@@ -1059,6 +1139,7 @@
 
         // ---- Aggiorna UI dai dati Firestore ----
         function updateUI(data) {
+            statsState = data?.consumi_stats || null;
             for (const key in varieState) {
                 const val = (data && data[key] !== undefined) ? data[key] : 0;
                 varieState[key] = val;
@@ -1088,6 +1169,7 @@
                 docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true });
             }
             renderFinanzeUI(finanzeMovimenti);
+            if (document.getElementById('stats-modal').open) renderStats();
             // Aggiorna conteggi nei risultati di ricerca se visibili
             const cercaEl = document.getElementById('cerca-input');
             if (cercaEl && cercaEl.value.trim()) {
@@ -1112,6 +1194,7 @@
         // ---- Ascolta i cambiamenti in tempo reale ----
         docRef.onSnapshot(snapshot => {
             updateUI(snapshot.data());
+            if (!snapshot.metadata.hasPendingWrites) avviaMonitoraggio();
             setSyncStatus('✅ Sincronizzato', 2000);
         }, err => {
             console.error(err);
@@ -1120,10 +1203,24 @@
 
         // ---- Modifica un contatore ----
         function changeCount(item, amount) {
-            const newVal = Math.max(0, (varieState[item] || 0) + amount);
-            docRef.set({ [item]: newVal }, { merge: true })
+            if (!Object.prototype.hasOwnProperty.call(varieState, item) || !Number.isInteger(amount)) return;
+            db.runTransaction(async transaction => {
+                const snapshot = await transaction.get(docRef);
+                const data = snapshot.data() || {};
+                const oldVal = Number(data[item]) || 0;
+                const newVal = Math.max(0, oldVal + amount);
+                const stats = data.consumi_stats || {
+                    startedAt: firebase.firestore.FieldValue.serverTimestamp(), consumed: {}
+                };
+                const consumed = { ...(stats.consumed || {}) };
+                const used = Math.max(0, oldVal - newVal);
+                if (used) consumed[item] = (Number(consumed[item]) || 0) + used;
+                transaction.set(docRef, { [item]: newVal,
+                    consumi_stats: { ...stats, consumed }
+                }, { merge: true });
+            })
                 .then(() => setSyncStatus('✅ Salvato', 2000))
-                .catch(() => setSyncStatus('❌ Errore salvataggio'));
+                .catch(() => setSyncStatus('❌ Errore salvataggio: verifica la connessione'));
         }
 
         // ---- Aggiungi quantità con prompt ----
