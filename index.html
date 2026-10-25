@@ -381,6 +381,14 @@
             position: relative;
         }
 
+        @media (max-width: 599.98px) {
+            #cerca-bar {
+                width: 100%;
+                max-width: none;
+                min-width: 0;
+            }
+        }
+
         #cerca-input {
             width: 100%;
             padding: 14px 48px 14px 18px;
@@ -1200,6 +1208,19 @@
                 .catch(() => setSyncStatus('❌ Errore salvataggio'));
         }
 
+        // I clic vengono mostrati subito; Firestore resta la fonte dei valori confermati.
+        const contatoriConfermati = {};
+        const contatoriInAttesa = {};
+        let codaContatori = Promise.resolve();
+
+        function mostraContatore(key, value) {
+            varieState[key] = value;
+            for (const prefix of ['count-', 'cerca-count-']) {
+                const el = document.getElementById(prefix + key);
+                if (el) el.textContent = value;
+            }
+        }
+
         // ---- Aggiorna UI dai dati Firestore ----
         function updateUI(data) {
             statsState = data?.consumi_stats || null;
@@ -1207,9 +1228,8 @@
             finanzeCaricate = Array.isArray(data?.finanze_movimenti);
             for (const key in varieState) {
                 const val = (data && data[key] !== undefined) ? data[key] : 0;
-                varieState[key] = val;
-                const el = document.getElementById('count-' + key);
-                if (el) el.textContent = val;
+                contatoriConfermati[key] = val;
+                if (!contatoriInAttesa[key]) mostraContatore(key, val);
             }
             noteKeys.forEach(k => {
                 const el = document.getElementById(k);
@@ -1260,7 +1280,7 @@
         docRef.onSnapshot(snapshot => {
             updateUI(snapshot.data());
             if (!snapshot.metadata.hasPendingWrites) avviaMonitoraggio();
-            setSyncStatus('✅ Sincronizzato', 2000);
+            if (!Object.values(contatoriInAttesa).some(Boolean)) setSyncStatus('✅ Sincronizzato', 2000);
         }, err => {
             console.error(err);
             setSyncStatus('❌ Errore connessione');
@@ -1269,7 +1289,11 @@
         // ---- Modifica un contatore ----
         function changeCount(item, amount) {
             if (!Object.prototype.hasOwnProperty.call(varieState, item) || !Number.isInteger(amount)) return;
-            db.runTransaction(async transaction => {
+            const displayed = Math.max(0, (Number(varieState[item]) || 0) + amount);
+            contatoriInAttesa[item] = (contatoriInAttesa[item] || 0) + 1;
+            mostraContatore(item, displayed);
+            setSyncStatus('⏳ Salvataggio…');
+            codaContatori = codaContatori.then(() => db.runTransaction(async transaction => {
                 const snapshot = await transaction.get(docRef);
                 const data = snapshot.data() || {};
                 const oldVal = Number(data[item]) || 0;
@@ -1283,9 +1307,17 @@
                 transaction.set(docRef, { [item]: newVal,
                     consumi_stats: { ...stats, consumed }
                 }, { merge: true });
-            })
+            }))
                 .then(() => setSyncStatus('✅ Salvato', 2000))
-                .catch(() => setSyncStatus('❌ Errore salvataggio: verifica la connessione'));
+                .catch(() => setSyncStatus('❌ Errore salvataggio: verifica la connessione'))
+                .finally(() => {
+                    contatoriInAttesa[item]--;
+                    if (!contatoriInAttesa[item]) {
+                        mostraContatore(item, contatoriConfermati[item] || 0);
+                    }
+                    if (document.getElementById('stats-modal').open) renderStats();
+                });
+            return codaContatori;
         }
 
         // ---- Aggiungi quantità con prompt ----
@@ -1397,9 +1429,9 @@
                             <span class="cerca-item-label">${c.label}</span>
                             <span class="cerca-item-badge">${c.sezione}</span>
                             <div class="cerca-item-controls">
-                                <button onclick="changeCount('${c.key}', -1); setTimeout(()=>cercaContatore(document.getElementById('cerca-input').value),100)">-1</button>
+                                <button onclick="changeCount('${c.key}', -1)">-1</button>
                                 <span class="cerca-item-count" id="cerca-count-${c.key}">${count}</span>
-                                <button onclick="promptAdd(event, '${c.key}'); setTimeout(()=>cercaContatore(document.getElementById('cerca-input').value),300)">+</button>
+                                <button onclick="promptAdd(event, '${c.key}')">+</button>
                             </div>
                         </div>
                     `;
