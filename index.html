@@ -955,6 +955,7 @@
         let finanzeVerifica = null;
         let finanzeCaricate = false;
         let verificaInCorso = false;
+        let verificaSaldoInAttesa = null;
 
         function saldoInCentesimi(movimenti) {
             return (movimenti || []).reduce((saldo, movimento) => saldo +
@@ -966,18 +967,20 @@
             const status = document.getElementById('finanze-ultima-verifica');
             button.disabled = !finanzeCaricate || verificaInCorso;
             button.textContent = verificaInCorso ? 'Salvataggio verifica…' : '✅ Il saldo coincide con la banca';
-            const date = finanzeVerifica?.data?.toDate?.();
+            const verifica = verificaSaldoInAttesa || finanzeVerifica;
+            const date = verifica?.data?.toDate?.();
             if (!date) {
                 status.textContent = finanzeCaricate
                     ? 'Nessuna verifica registrata. Premi il tasto dopo aver confrontato il saldo con l’app della banca.'
                     : 'In attesa dei dati…';
                 return;
             }
-            const saldo = (finanzeVerifica.saldoCentesimi / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+            const saldo = (verifica.saldoCentesimi / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
             status.textContent = 'Ultima verifica: ' + date.toLocaleString('it-IT', {
                 day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
             }) + ' · Saldo confermato: ' + saldo + '.';
-            if (saldoInCentesimi(finanzeMovimenti) !== finanzeVerifica.saldoCentesimi) {
+            if (verificaSaldoInAttesa) status.textContent += ' Salvataggio in corso…';
+            if (saldoInCentesimi(finanzeMovimenti) !== verifica.saldoCentesimi) {
                 status.textContent += ' Il saldo è cambiato dopo quella verifica.';
             }
         }
@@ -986,6 +989,9 @@
             if (!finanzeCaricate || verificaInCorso) return;
             const saldoConfermato = saldoInCentesimi(finanzeMovimenti);
             verificaInCorso = true;
+            verificaSaldoInAttesa = {
+                data: firebase.firestore.Timestamp.now(), saldoCentesimi: saldoConfermato
+            };
             renderVerificaSaldo();
             try {
                 await db.runTransaction(async transaction => {
@@ -999,13 +1005,22 @@
                         saldoCentesimi: saldoConfermato
                     } }, { merge: true });
                 });
+                // Aggiorna anche se la notifica realtime non è ancora arrivata.
+                finanzeVerifica = verificaSaldoInAttesa;
+                verificaSaldoInAttesa = null;
+                renderVerificaSaldo();
                 setSyncStatus('✅ Verifica saldo salvata', 3000);
+                docRef.get({ source: 'server' }).then(snapshot => {
+                    finanzeVerifica = snapshot.data({ serverTimestamps: 'estimate' })?.finanze_verifica || finanzeVerifica;
+                    renderVerificaSaldo();
+                }).catch(error => console.error('Rilettura verifica saldo:', error));
             } catch (error) {
                 alert(error.message === 'saldo-cambiato'
                     ? 'Il saldo è cambiato durante la verifica. Confrontalo nuovamente con quello della banca.'
                     : 'Verifica non salvata. Controlla la connessione e riprova.');
             } finally {
                 verificaInCorso = false;
+                verificaSaldoInAttesa = null;
                 renderVerificaSaldo();
             }
         }
@@ -1277,8 +1292,8 @@
         }
 
         // ---- Ascolta i cambiamenti in tempo reale ----
-        docRef.onSnapshot(snapshot => {
-            updateUI(snapshot.data());
+        docRef.onSnapshot({ includeMetadataChanges: true }, snapshot => {
+            updateUI(snapshot.data({ serverTimestamps: 'estimate' }));
             if (!snapshot.metadata.hasPendingWrites) avviaMonitoraggio();
             if (!Object.values(contatoriInAttesa).some(Boolean)) setSyncStatus('✅ Sincronizzato', 2000);
         }, err => {
