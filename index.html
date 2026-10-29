@@ -342,8 +342,7 @@
             background: var(--color-beige);
             border-radius: 16px;
             padding: 14px 16px;
-            max-height: 220px;
-            overflow-y: auto;
+            max-height: none;
         }
 
         .finanze-item {
@@ -576,6 +575,14 @@
             .spesa-grid { grid-template-columns: 1fr; gap: 16px; }
             .spesa-card { padding: 16px; }
         }
+        .finanze-mese { padding: 18px; border-radius: 14px; background: var(--color-surface); }
+        .finanze-mese + .finanze-mese { margin-top: 20px; }
+        .finanze-mese h3 { margin-bottom: 14px; font-size: 1.15rem; text-transform: capitalize; }
+        .finanze-mese-totali { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+        .finanze-mese-totali > div { flex: 1; min-width: 160px; padding: 12px; background: var(--color-beige); border-radius: 10px; }
+        .finanze-mese-totali strong { display: block; margin-top: 6px; font-size: 1.1rem; }
+        .finanze-mese .finanze-item { gap: 12px; flex-wrap: wrap; }
+        .finanze-mese .finanze-item > div:first-child { min-width: 120px; overflow-wrap: anywhere; }
     </style>
 </head>
 <body>
@@ -900,7 +907,7 @@
         </div>
 
         <!-- Lista Transazioni -->
-        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Ultimi Movimenti:</div>
+        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px;">Movimenti per mese:</div>
         <div class="finanze-list-container" id="finanze-lista">
             <div style="text-align: center; color: #777; font-size: 0.9rem; padding: 12px 0;">Nessun movimento registrato</div>
         </div>
@@ -1211,6 +1218,30 @@
                 .catch(() => setSyncStatus('❌ Errore salvataggio'));
         }
 
+        function raggruppaMovimentiPerMese(movimenti) {
+            const gruppi = new Map();
+            (movimenti || []).forEach(m => {
+                const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(m.data || '');
+                let date = match ? new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]), 12) : null;
+                if (date && (date.getFullYear() !== Number(match[3]) || date.getMonth() !== Number(match[2]) - 1 || date.getDate() !== Number(match[1]))) date = null;
+                if (!date && Number.isFinite(m.ts)) date = new Date(m.ts);
+                const valid = date && !Number.isNaN(date.getTime());
+                const key = valid ? date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') : '0000-00';
+                if (!gruppi.has(key)) gruppi.set(key, {
+                    key,
+                    titolo: valid ? date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }) : 'Data non disponibile',
+                    accrediti: 0, addebiti: 0, movimenti: []
+                });
+                const gruppo = gruppi.get(key);
+                gruppo[m.tipo === 'accredito' ? 'accrediti' : 'addebiti'] += Math.round(Number(m.importo) * 100);
+                gruppo.movimenti.push({ movimento: m, ordine: valid ? date.getTime() : 0 });
+            });
+            return [...gruppi.values()].sort((a, b) => b.key.localeCompare(a.key)).map(gruppo => ({
+                ...gruppo,
+                movimenti: gruppo.movimenti.sort((a, b) => b.ordine - a.ordine || (b.movimento.ts || 0) - (a.movimento.ts || 0)).map(item => item.movimento)
+            }));
+        }
+
         function renderFinanzeUI(movimenti) {
             const saldoEl = document.getElementById('finanze-saldo');
             const entrateEl = document.getElementById('finanze-tot-entrate');
@@ -1240,7 +1271,15 @@
                 return;
             }
 
-            listaEl.innerHTML = movimenti.map(m => {
+            const euro = centesimi => (centesimi / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+            listaEl.innerHTML = raggruppaMovimentiPerMese(movimenti).map(gruppo => `
+                <section class="finanze-mese">
+                    <h3>${gruppo.titolo}</h3>
+                    <div class="finanze-mese-totali">
+                        <div>Totale accrediti <strong>+ ${euro(gruppo.accrediti)}</strong></div>
+                        <div>Totale addebiti <strong>− ${euro(gruppo.addebiti)}</strong></div>
+                    </div>
+                    ${gruppo.movimenti.map(m => {
                 const isAcc = m.tipo === 'accredito';
                 const col = isAcc ? '#4a8f5e' : '#b54a4a';
                 const sgn = isAcc ? '+' : '-';
@@ -1258,7 +1297,9 @@
                         </div>
                     </div>
                 `;
-            }).join('');
+            }).join('')}
+                </section>
+            `).join('');
         }
 
         function apriEditRow(id) {
