@@ -540,6 +540,9 @@
                 padding: 20px !important;
             }
         }
+        .bevande-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+        .bevande-label { display: block; margin-bottom: 10px; font-size: 1.1rem; font-weight: 700; }
+        @media (max-width: 1000px) { .bevande-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -871,8 +874,23 @@
     <dialog id="bevande-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 550px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
         <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">🥤 Bevande</h2>
 
-        <div class="free-text-container" style="margin-top: 0;">
-            <textarea id="note_bevande" class="free-text-input" placeholder="Scrivi qui l'elenco e le note per Bevande..." oninput="salvaNote('note_bevande', this.value)" style="min-height: 140px;"></textarea>
+        <div class="bevande-grid">
+            <div>
+                <label for="note_bevande_birre" class="bevande-label">Birre</label>
+                <textarea id="note_bevande_birre" class="free-text-input" placeholder="Scrivi qui birre e note..." oninput="salvaNote('note_bevande_birre', this.value)" style="min-height: 180px;"></textarea>
+            </div>
+            <div>
+                <label for="note_bevande_coche" class="bevande-label">Coche</label>
+                <textarea id="note_bevande_coche" class="free-text-input" placeholder="Scrivi qui coche e note..." oninput="salvaNote('note_bevande_coche', this.value)" style="min-height: 180px;"></textarea>
+            </div>
+            <div>
+                <label for="note_bevande_succhi" class="bevande-label">Succhi</label>
+                <textarea id="note_bevande_succhi" class="free-text-input" placeholder="Scrivi qui succhi e note..." oninput="salvaNote('note_bevande_succhi', this.value)" style="min-height: 180px;"></textarea>
+            </div>
+            <div>
+                <label for="note_bevande" class="bevande-label">Altro</label>
+                <textarea id="note_bevande" class="free-text-input" placeholder="Scrivi qui altro e note..." oninput="salvaNote('note_bevande', this.value)" style="min-height: 180px;"></textarea>
+            </div>
         </div>
 
         <div style="text-align: center; margin-top: 24px;">
@@ -1010,7 +1028,7 @@
         };
 
         const noteKeys = [
-            'note_varie', 'note_bagno', 'note_freezer', 'note_bevande', 'note_dispensa', 'note_finanze',
+            'note_varie', 'note_bagno', 'note_freezer', 'note_bevande', 'note_bevande_birre', 'note_bevande_coche', 'note_bevande_succhi', 'note_dispensa', 'note_finanze',
             'spesa_generale', 'spesa_esselunga', 'spesa_lidl', 'spesa_ipercoop'
         ];
 
