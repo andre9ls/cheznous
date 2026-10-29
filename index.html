@@ -837,8 +837,23 @@
     <dialog id="freezer-modal" style="padding: 28px; border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 95%; max-width: 550px; margin: auto; background-color: var(--color-bg); color: var(--color-text);">
         <h2 style="margin-bottom: 24px; text-align: center; font-size: 1.4rem;">❄️ Freezer e Cibo</h2>
 
-        <div class="free-text-container" style="margin-top: 0;">
-            <textarea id="note_freezer" class="free-text-input" placeholder="Scrivi qui l'elenco e le note per Freezer e Cibo..." oninput="salvaNote('note_freezer', this.value)" style="min-height: 140px;"></textarea>
+        <div class="spesa-grid">
+            <div class="spesa-card">
+                <label for="note_freezer" class="spesa-label">Carne e Pesce</label>
+                <textarea id="note_freezer" class="free-text-input" placeholder="Aggiungi carne e pesce e note..." oninput="salvaNote('note_freezer', this.value)"></textarea>
+            </div>
+            <div class="spesa-card">
+                <label for="note_freezer_verdure" class="spesa-label">Verdure</label>
+                <textarea id="note_freezer_verdure" class="free-text-input" placeholder="Aggiungi verdure e note..." oninput="salvaNote('note_freezer_verdure', this.value)"></textarea>
+            </div>
+            <div class="spesa-card">
+                <label for="note_freezer_pasta" class="spesa-label">Pasta</label>
+                <textarea id="note_freezer_pasta" class="free-text-input" placeholder="Aggiungi pasta e note..." oninput="salvaNote('note_freezer_pasta', this.value)"></textarea>
+            </div>
+            <div class="spesa-card">
+                <label for="note_freezer_sughi" class="spesa-label">Sughi</label>
+                <textarea id="note_freezer_sughi" class="free-text-input" placeholder="Aggiungi sughi e note..." oninput="salvaNote('note_freezer_sughi', this.value)"></textarea>
+            </div>
         </div>
 
         <div style="text-align: center; margin-top: 24px;">
@@ -1061,7 +1076,7 @@
         };
 
         const noteKeys = [
-            'note_varie', 'note_bagno', 'note_freezer', 'note_bevande', 'note_bevande_birre', 'note_bevande_coche', 'note_bevande_succhi', 'note_dispensa', 'note_finanze',
+            'note_varie', 'note_bagno', 'note_freezer', 'note_freezer_verdure', 'note_freezer_pasta', 'note_freezer_sughi', 'note_bevande', 'note_bevande_birre', 'note_bevande_coche', 'note_bevande_succhi', 'note_dispensa', 'note_finanze',
             'spesa_generale', 'spesa_esselunga', 'spesa_lidl', 'spesa_ipercoop'
         ];
 
