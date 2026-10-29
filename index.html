@@ -477,6 +477,69 @@
         dialog::backdrop {
             background: rgba(0,0,0,0.4);
         }
+
+        /* Navigazione laterale e area di lavoro a tutta larghezza. */
+        @media (min-width: 760px) {
+            :root { --sidebar-width: 230px; --workspace-top: 94px; }
+            body { padding: 20px; }
+            header { margin-bottom: 22px; }
+            #cerca-bar {
+                position: fixed;
+                top: var(--workspace-top);
+                left: 20px;
+                width: var(--sidebar-width);
+                min-width: 0;
+                max-width: none;
+                z-index: 2;
+            }
+            main {
+                position: fixed;
+                top: calc(var(--workspace-top) + 68px);
+                bottom: 20px;
+                left: 20px;
+                width: var(--sidebar-width);
+                overflow-y: auto;
+                padding: 0 6px 12px;
+            }
+            .section-title { margin-bottom: 12px; }
+            .button-grid { grid-template-columns: 1fr; gap: 10px; }
+            .nav-btn {
+                padding: 16px 12px;
+                border-radius: 16px;
+                font-size: 1rem;
+                justify-content: flex-start;
+                text-align: left;
+            }
+            .nav-btn[aria-expanded="true"] {
+                background: var(--color-green);
+                outline: 2px solid var(--color-text);
+                outline-offset: -2px;
+            }
+            body > dialog {
+                position: fixed;
+                inset: var(--workspace-top) 20px 20px calc(var(--sidebar-width) + 40px);
+                width: auto !important;
+                height: auto;
+                max-width: none !important;
+                max-height: none !important;
+                margin: 0 !important;
+                overflow: auto;
+                overscroll-behavior: contain;
+            }
+        }
+        @media (max-width: 759.98px) {
+            body > dialog {
+                position: fixed;
+                inset: 8px;
+                width: calc(100% - 16px) !important;
+                height: calc(100% - 16px);
+                max-width: none !important;
+                max-height: none !important;
+                margin: 0 !important;
+                overflow: auto;
+                padding: 20px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -899,7 +962,7 @@
 
         function apriStats() {
             renderStats();
-            document.getElementById('stats-modal').showModal();
+            apriPannello('stats-modal');
             avviaMonitoraggio();
         }
 
@@ -1350,29 +1413,58 @@
             }
         }
 
+        function apriPannello(id) {
+            document.querySelectorAll('body > dialog[open]').forEach(dialog => dialog.close());
+            const panel = document.getElementById(id);
+            if (window.matchMedia('(min-width: 760px)').matches) panel.show();
+            else panel.showModal();
+            document.querySelectorAll('.nav-btn[onclick]').forEach(button => {
+                const selected = button.getAttribute('aria-controls') === id;
+                button.setAttribute('aria-expanded', String(selected));
+            });
+        }
+
+        document.querySelectorAll('.nav-btn[onclick]').forEach(button => {
+            const name = button.getAttribute('onclick').match(/apri(\w+)/)[1].toLowerCase();
+            button.setAttribute('aria-controls', name + '-modal');
+            button.setAttribute('aria-expanded', 'false');
+        });
+        document.querySelectorAll('body > dialog').forEach(panel => {
+            panel.addEventListener('close', () => {
+                if (panel.open) return;
+                document.querySelectorAll('.nav-btn[aria-controls="' + panel.id + '"]').forEach(button => {
+                    button.setAttribute('aria-expanded', 'false');
+                });
+            });
+        });
+        window.matchMedia('(min-width: 760px)').addEventListener('change', () => {
+            const panel = document.querySelector('body > dialog[open]');
+            if (panel) apriPannello(panel.id);
+        });
+
         // ---- Apri modal ----
         function apriVarie() {
-            document.getElementById('varie-modal').showModal();
+            apriPannello('varie-modal');
         }
 
         function apriBagno() {
-            document.getElementById('bagno-modal').showModal();
+            apriPannello('bagno-modal');
         }
 
         function apriFreezer() {
-            document.getElementById('freezer-modal').showModal();
+            apriPannello('freezer-modal');
         }
 
         function apriFinanze() {
-            document.getElementById('finanze-modal').showModal();
+            apriPannello('finanze-modal');
         }
 
         function apriBevande() {
-            document.getElementById('bevande-modal').showModal();
+            apriPannello('bevande-modal');
         }
 
         function apriSpesa() {
-            document.getElementById('spesa-modal').showModal();
+            apriPannello('spesa-modal');
         }
 
         // ---- Indicatore sync ----
