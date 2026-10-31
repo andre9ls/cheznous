@@ -51,6 +51,13 @@
         header {
             margin-bottom: 40px;
             text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px 24px;
+            position: relative;
+            z-index: 2;
         }
 
         header h1 {
@@ -376,10 +383,11 @@
 
         /* ---- Cerca contatori ---- */
         #cerca-bar {
-            width: 33%;
-            max-width: 400px;
-            min-width: 200px;
-            margin: 0 auto 20px auto;
+            flex: 1 1 280px;
+            max-width: 480px;
+            min-width: 0;
+            margin: 0;
+            text-align: left;
             position: relative;
         }
 
@@ -440,10 +448,16 @@
             transition: background 0.15s;
         }
 
+        @media (max-width: 599.98px) {
+            .cerca-item { flex-wrap: wrap; gap: 8px; }
+            .cerca-item-label { flex-basis: 100%; }
+            .cerca-item-controls { margin-left: auto; }
+        }
+
         .cerca-item:last-child { border-bottom: none; }
         .cerca-item:hover { background: var(--color-beige); }
 
-        .cerca-item-label { font-size: 0.95rem; flex: 1; }
+        .cerca-item-label { font-size: 0.95rem; flex: 1; min-width: 0; overflow-wrap: anywhere; }
         .cerca-item-badge {
             font-size: 0.75rem;
             background: var(--color-green);
@@ -457,6 +471,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-shrink: 0;
         }
 
         .cerca-item-controls button {
@@ -482,19 +497,12 @@
         @media (min-width: 760px) {
             :root { --sidebar-width: 230px; --workspace-top: 94px; }
             body { padding: 20px; }
-            header { margin-bottom: 22px; }
-            #cerca-bar {
-                position: fixed;
-                top: var(--workspace-top);
-                left: 20px;
-                width: var(--sidebar-width);
-                min-width: 0;
-                max-width: none;
-                z-index: 2;
-            }
+            header { margin-bottom: 22px; flex-wrap: nowrap; }
+            header h1 { flex-shrink: 0; font-size: clamp(1rem, 2.1vw, 1.65rem); }
+            #cerca-risultati { width: max(100%, 480px); left: auto; }
             main {
                 position: fixed;
-                top: calc(var(--workspace-top) + 68px);
+                top: var(--workspace-top);
                 bottom: 20px;
                 left: 20px;
                 width: var(--sidebar-width);
@@ -589,7 +597,6 @@
 
     <header>
         <h1>Via Napione 21 Bis, <span id="current-date"></span></h1>
-    </header>
 
     <!-- CERCA CONTATORI -->
     <div id="cerca-bar">
@@ -597,6 +604,7 @@
         <span id="cerca-icon">🔍</span>
         <div id="cerca-risultati"></div>
     </div>
+    </header>
 
     <main>
         <div class="section-title" style="margin-top: 0;">Inventario</div>
