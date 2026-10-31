@@ -591,9 +591,22 @@
         .finanze-mese-totali strong { display: block; margin-top: 6px; font-size: 1.1rem; }
         .finanze-mese .finanze-item { gap: 12px; flex-wrap: wrap; }
         .finanze-mese .finanze-item > div:first-child { min-width: 120px; overflow-wrap: anywhere; }
+        #auth-gate { position: fixed; inset: 0; z-index: 20000; display: grid; place-items: center; background: #f5f1eb; padding: 24px; }
+        #auth-gate[hidden] { display: none; }
+        .auth-card { max-width: 420px; text-align: center; background: white; padding: 32px; border-radius: 20px; box-shadow: 0 8px 32px #0002; }
+        .auth-card button { padding: 12px 20px; border-radius: 12px; cursor: pointer; }
+        #auth-message { line-height: 1.5; }
+        #account-bar { position: fixed; bottom: 10px; right: 12px; z-index: 10000; }
     </style>
 </head>
 <body>
+    <div id="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <div class="auth-card"><h1 id="auth-title">ChezNous</h1>
+            <p id="auth-message" role="status">Verifica dell’accesso…</p>
+            <button id="auth-login" type="button" onclick="accediGoogle()" hidden>Accedi con Google</button>
+        </div>
+    </div>
+    <div id="account-bar" hidden><button type="button" onclick="esciAccount()">Esci</button></div>
 
     <header>
         <h1>Via Napione 21 Bis, <span id="current-date"></span></h1>
@@ -1007,6 +1020,7 @@
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
     <script>
@@ -1472,14 +1486,17 @@
         }
 
         // ---- Ascolta i cambiamenti in tempo reale ----
-        docRef.onSnapshot({ includeMetadataChanges: true }, snapshot => {
+        function ascoltaDati() {
+            return docRef.onSnapshot({ includeMetadataChanges: true }, snapshot => {
             updateUI(snapshot.data({ serverTimestamps: 'estimate' }));
             if (!snapshot.metadata.hasPendingWrites) avviaMonitoraggio();
             if (!Object.values(contatoriInAttesa).some(Boolean)) setSyncStatus('✅ Sincronizzato', 2000);
         }, err => {
             console.error(err);
             setSyncStatus('❌ Errore connessione');
+            mostraAccesso(err.code === 'permission-denied' ? 'Accesso ai dati non autorizzato.' : 'Connessione non riuscita. Ricarica la pagina per riprovare.');
         });
+        }
 
         // ---- Modifica un contatore ----
         function changeCount(item, amount) {
@@ -1672,6 +1689,48 @@
             }
         });
 
+
+        // L'autorizzazione effettiva è applicata dalle regole Firestore.
+        const auth = firebase.auth();
+        const accountAutorizzati = ['andrea.novelli.to.94@gmail.com', 'michela.racca992@gmail.com'];
+        let interrompiAscolto = null;
+        function mostraAccesso(messaggio) {
+            document.getElementById('auth-message').textContent = messaggio;
+            document.getElementById('auth-gate').hidden = false;
+            document.getElementById('auth-login').hidden = false;
+        }
+        async function accediGoogle() {
+            const button = document.getElementById('auth-login');
+            button.disabled = true;
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
+                await auth.signInWithPopup(provider);
+            } catch (err) {
+                const messaggi = {
+                    'auth/popup-closed-by-user': 'Accesso annullato. Puoi riprovare.',
+                    'auth/popup-blocked': 'Consenti le finestre popup per accedere con Google.',
+                    'auth/network-request-failed': 'Verifica la connessione e riprova.'
+                };
+                mostraAccesso(messaggi[err.code] || 'Accesso non riuscito. Riprova tra poco.');
+                console.error(err);
+            } finally { button.disabled = false; }
+        }
+        async function esciAccount() {
+            try { await auth.signOut(); location.reload(); }
+            catch (err) { setSyncStatus('❌ Impossibile uscire. Riprova.'); }
+        }
+        auth.onAuthStateChanged(user => {
+            if (interrompiAscolto) { interrompiAscolto(); interrompiAscolto = null; }
+            document.getElementById('account-bar').hidden = !user;
+            if (!user) { mostraAccesso('Accedi con il tuo account Google per utilizzare ChezNous.'); return; }
+            if (!user.emailVerified || !accountAutorizzati.includes(user.email)) {
+                mostraAccesso('Questo account non è autorizzato. Accedi con un altro account Google.');
+                return;
+            }
+            document.getElementById('auth-gate').hidden = true;
+            interrompiAscolto = ascoltaDati();
+        }, err => { console.error(err); mostraAccesso('Impossibile verificare l’accesso. Ricarica la pagina.'); });
     </script>
 </body>
 </html>
