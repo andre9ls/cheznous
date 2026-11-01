@@ -10,8 +10,59 @@ service cloud.firestore {
           'michela.racca992@gmail.com'
         ];
     }
+    function telefonoAbilitato() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/widgetDevices/$(request.auth.uid)).data.enabled == true;
+    }
     match /varie/contatori {
       allow get, create, update: if autorizzato();
+    }
+    match /widgetDevices/{uid} {
+      // Only the household can approve/revoke a device. A phone can check its own approval.
+      allow get: if autorizzato() || (request.auth != null && request.auth.uid == uid);
+      allow list: if autorizzato();
+      allow create, update: if autorizzato()
+        && request.resource.data.keys().hasOnly(['enabled', 'linkedAt'])
+        && request.resource.data.enabled is bool
+        && request.resource.data.linkedAt is timestamp;
+    }
+    match /widgetState/finanze {
+      // A version guards bank-balance confirmations against new or edited widget movements.
+      allow get: if autorizzato() || telefonoAbilitato();
+      allow create: if autorizzato()
+        && request.resource.data.keys().hasOnly(['version', 'updatedAt'])
+        && request.resource.data.version == 0
+        && request.resource.data.updatedAt == request.time;
+      allow update: if telefonoAbilitato()
+        && request.resource.data.keys().hasOnly(['version', 'updatedAt'])
+        && request.resource.data.version is int
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.updatedAt == request.time;
+    }
+    match /widgetMovements/{id} {
+      function valido() {
+        let m = request.resource.data;
+        return telefonoAbilitato()
+          && m.keys().hasOnly(['uid', 'sourceId', 'revision', 'active', 'cents', 'date', 'note'])
+          && m.uid == request.auth.uid
+          && m.sourceId is string
+          && m.sourceId.matches('^[A-Za-z0-9-]{1,64}$')
+          && id == m.uid + '_' + m.sourceId
+          && m.revision is int && m.revision >= 0
+          && m.active is bool && m.cents is int
+          && m.cents >= -10000000000 && m.cents <= 10000000000
+          && m.date is string && m.note is string && m.note.size() <= 200
+          && ((m.active && m.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+            || (!m.active && m.cents == 0 && m.date == '' && m.note == ''))
+          && getAfter(/databases/$(database)/documents/widgetState/finanze).data.version
+             == get(/databases/$(database)/documents/widgetState/finanze).data.version + 1;
+      }
+      allow read: if autorizzato();
+      allow create: if valido();
+      allow update: if valido() && resource.data.uid == request.auth.uid
+        && request.resource.data.sourceId == resource.data.sourceId
+        && (request.resource.data == resource.data || request.resource.data.revision > resource.data.revision);
+      // Withdrawal is an inactive tombstone, preventing stale retries from restoring an old row.
     }
   }
 }

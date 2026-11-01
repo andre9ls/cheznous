@@ -935,6 +935,16 @@
         </div>
 
         <!-- Form Inserimento Spesa / Accredito -->
+        <details class="finanze-card" style="margin-bottom: 20px;">
+            <summary style="cursor: pointer;">Collega widget MoneyManager</summary>
+            <p style="margin: 12px 0;">Nell’app MoneyManager premi «Collega a ChezNous» e copia qui il codice. Saranno riportati solo i nuovi movimenti Novelli-Racca. Per modificare o eliminare i movimenti del widget usa MoneyManager.</p>
+            <label for="widget-code">Codice del telefono</label>
+            <input id="widget-code" class="finanze-input-field" autocomplete="off" spellcheck="false" maxlength="128" style="width: 100%; margin: 8px 0;">
+            <button type="button" id="widget-link" class="finanze-tipo-btn" onclick="collegaWidget()">Autorizza telefono</button>
+            <p id="widget-status" role="status" style="margin-top: 12px;">Caricamento collegamenti…</p>
+            <div id="widget-devices"></div>
+        </details>
+
         <div class="finanze-form">
             <div class="finanze-tipo-toggle">
                 <button type="button" id="btn-tipo-spesa" class="finanze-tipo-btn active spesa" onclick="setFinanzeTipo('spesa')">🔴 Spesa (-)</button>
@@ -1116,6 +1126,84 @@
 
         // ---- Finanze State & Logic ----
         let finanzeMovimenti = [];
+        let widgetMovimenti = [];
+        let widgetCaricati = false;
+        const widgetFeed = db.collection('widgetMovements');
+        const widgetDevices = db.collection('widgetDevices');
+        const widgetState = db.collection('widgetState').doc('finanze');
+        const tuttiMovimentiFinanze = () => [...finanzeMovimenti, ...widgetMovimenti];
+        const escapeHTML = value => String(value).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+
+        function movimentoWidget(doc) {
+            const m = doc.data();
+            if (m.active !== true || !Number.isSafeInteger(m.cents) || !/^\d{4}-\d{2}-\d{2}$/.test(m.date)) return null;
+            const [year, month, day] = m.date.split('-');
+            return { id: 'widget_' + doc.id, tipo: m.cents >= 0 ? 'accredito' : 'spesa',
+                desc: m.note || (m.cents >= 0 ? 'Accredito' : 'Spesa'),
+                importo: Math.abs(m.cents) / 100, data: `${day}/${month}/${year}`,
+                ts: new Date(Number(year), Number(month) - 1, Number(day), 12).getTime(), widget: true };
+        }
+
+        async function collegaWidget() {
+            const code = document.getElementById('widget-code').value.trim();
+            const status = document.getElementById('widget-status');
+            if (!/^[A-Za-z0-9_-]{20,128}$/.test(code)) { status.textContent = 'Copia il codice completo mostrato nell’app MoneyManager.'; return; }
+            const button = document.getElementById('widget-link');
+            button.disabled = true;
+            try {
+                await db.runTransaction(async transaction => {
+                    const state = await transaction.get(widgetState);
+                    transaction.set(widgetDevices.doc(code), { enabled: true,
+                        linkedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                    if (!state.exists) transaction.set(widgetState, { version: 0,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                });
+                document.getElementById('widget-code').value = '';
+                status.textContent = 'Telefono autorizzato. Premi Sincronizza in MoneyManager per avviare l’invio.';
+            } catch (error) { console.error(error); status.textContent = 'Collegamento non riuscito. Verifica connessione e configurazione Firebase.'; }
+            finally { button.disabled = false; }
+        }
+
+        async function revocaWidget(uid) {
+            if (!confirm('Interrompere l’invio da questo telefono? I movimenti già ricevuti resteranno nelle Finanze.')) return;
+            try { await widgetDevices.doc(uid).update({ enabled: false }); }
+            catch (error) { console.error(error); document.getElementById('widget-status').textContent = 'Revoca non riuscita. Riprova.'; }
+        }
+
+        function ascoltaWidget() {
+            widgetCaricati = false;
+            const stopFeed = widgetFeed.onSnapshot({ includeMetadataChanges: true }, snapshot => {
+                widgetMovimenti = snapshot.docs.map(movimentoWidget).filter(Boolean);
+                widgetCaricati = !snapshot.metadata.fromCache;
+                renderFinanzeUI(finanzeMovimenti);
+            }, error => {
+                widgetCaricati = false;
+                renderVerificaSaldo();
+                document.getElementById('widget-status').textContent = 'Invio dal widget non disponibile: controlla connessione e configurazione Firebase.';
+                console.error(error);
+            });
+            const stopDevices = widgetDevices.onSnapshot(snapshot => {
+                const container = document.getElementById('widget-devices');
+                container.replaceChildren();
+                document.getElementById('widget-status').textContent = snapshot.empty
+                    ? 'Nessun telefono collegato.' : 'Invio limitato al conto Novelli-Racca.';
+                snapshot.docs.forEach(doc => {
+                    const row = document.createElement('p');
+                    row.style.marginTop = '12px';
+                    row.append(document.createTextNode('Telefono …' + doc.id.slice(-6) + (doc.data().enabled ? ' · Attivo ' : ' · Revocato')));
+                    if (doc.data().enabled) {
+                        const button = document.createElement('button');
+                        button.type = 'button'; button.className = 'finanze-tipo-btn'; button.textContent = 'Revoca';
+                        button.onclick = () => revocaWidget(doc.id); row.append(button);
+                    }
+                    container.append(row);
+                });
+            }, error => { console.error(error); document.getElementById('widget-status').textContent = 'Configurazione collegamento widget da completare.'; });
+            return () => { stopFeed(); stopDevices(); widgetMovimenti = []; widgetCaricati = false; renderFinanzeUI(finanzeMovimenti); };
+        }
+
         let currentFinanzeTipo = 'spesa';
         let finanzeVerifica = null;
         let finanzeCaricate = false;
@@ -1130,7 +1218,7 @@
         function renderVerificaSaldo() {
             const button = document.getElementById('finanze-verifica-btn');
             const status = document.getElementById('finanze-ultima-verifica');
-            button.disabled = !finanzeCaricate || verificaInCorso;
+            button.disabled = !finanzeCaricate || !widgetCaricati || verificaInCorso;
             button.textContent = verificaInCorso ? 'Salvataggio verifica…' : '✅ Il saldo coincide con la banca';
             const verifica = verificaSaldoInAttesa || finanzeVerifica;
             const date = verifica?.data?.toDate?.();
@@ -1145,24 +1233,30 @@
                 day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
             }) + ' · Saldo confermato: ' + saldo + '.';
             if (verificaSaldoInAttesa) status.textContent += ' Salvataggio in corso…';
-            if (saldoInCentesimi(finanzeMovimenti) !== verifica.saldoCentesimi) {
+            if (saldoInCentesimi(tuttiMovimentiFinanze()) !== verifica.saldoCentesimi) {
                 status.textContent += ' Il saldo è cambiato dopo quella verifica.';
             }
         }
 
         async function confermaSaldoBanca() {
-            if (!finanzeCaricate || verificaInCorso) return;
-            const saldoConfermato = saldoInCentesimi(finanzeMovimenti);
+            if (!finanzeCaricate || !widgetCaricati || verificaInCorso) return;
+            const saldoConfermato = saldoInCentesimi(tuttiMovimentiFinanze());
             verificaInCorso = true;
             verificaSaldoInAttesa = {
                 data: firebase.firestore.Timestamp.now(), saldoCentesimi: saldoConfermato
             };
             renderVerificaSaldo();
             try {
+                // Read the version before the query; any concurrent feed write invalidates the confirmation.
+                const before = await widgetState.get({ source: 'server' });
+                const feed = await widgetFeed.get({ source: 'server' });
+                const imported = feed.docs.map(movimentoWidget).filter(Boolean);
                 await db.runTransaction(async transaction => {
                     const snapshot = await transaction.get(docRef);
+                    const state = await transaction.get(widgetState);
                     const movimenti = snapshot.data()?.finanze_movimenti;
-                    if (!Array.isArray(movimenti) || saldoInCentesimi(movimenti) !== saldoConfermato) {
+                    if (state.data()?.version !== before.data()?.version || !Array.isArray(movimenti)
+                        || saldoInCentesimi([...movimenti, ...imported]) !== saldoConfermato) {
                         throw new Error('saldo-cambiato');
                     }
                     transaction.set(docRef, { finanze_verifica: {
@@ -1270,6 +1364,7 @@
         }
 
         function renderFinanzeUI(movimenti) {
+            movimenti = [...(movimenti || []), ...widgetMovimenti];
             const saldoEl = document.getElementById('finanze-saldo');
             const entrateEl = document.getElementById('finanze-tot-entrate');
             const usciteEl = document.getElementById('finanze-tot-uscite');
@@ -1315,13 +1410,14 @@
                 return `
                     <div class="finanze-item" id="row-${m.id}">
                         <div style="display: flex; flex-direction: column; flex: 1;">
-                            <span style="font-weight: 600;">${m.desc}</span>
-                            <span style="font-size: 0.75rem; opacity: 0.65;">${m.data}</span>
+                            <span style="font-weight: 600;">${escapeHTML(m.desc)}</span>
+                            <span style="font-size: 0.75rem; opacity: 0.65;">${escapeHTML(m.data)}${m.widget ? ' · Dal widget' : ''}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <b style="color: ${col}; font-size: 1rem;">${sgn} ${impFmt} €</b>
+                            ${m.widget ? '<span style="font-size: 0.75rem; opacity: 0.65;">Gestisci nell’app</span>' : `
                             <button class="finanze-del-btn" title="Modifica" onclick="apriEditRow('${m.id}')">✏️</button>
-                            <button class="finanze-del-btn" title="Elimina" onclick="eliminaTransazione('${m.id}')">✕</button>
+                            <button class="finanze-del-btn" title="Elimina" onclick="eliminaTransazione('${m.id}')">✕</button>`}
                         </div>
                     </div>
                 `;
@@ -1387,7 +1483,7 @@
         function rettificaSaldo() {
             let totEntrate = 0;
             let totUscite = 0;
-            (finanzeMovimenti || []).forEach(m => {
+            tuttiMovimentiFinanze().forEach(m => {
                 if (m.tipo === 'accredito') totEntrate += m.importo;
                 else totUscite += m.importo;
             });
@@ -1452,7 +1548,7 @@
                     el.value = (data && data[k] !== undefined) ? data[k] : '';
                 }
             });
-            if (data && Array.isArray(data.finanze_movimenti) && data.finanze_movimenti.length > 0) {
+            if (data && Array.isArray(data.finanze_movimenti)) {
                 finanzeMovimenti = data.finanze_movimenti;
             } else {
                 // Impostazione saldo iniziale comunicato: 2101,24 €
@@ -1700,6 +1796,7 @@
         const auth = firebase.auth();
         const accountAutorizzati = ['andrea.novelli.to.94@gmail.com', 'michela.racca992@gmail.com'];
         let interrompiAscolto = null;
+        let interrompiWidget = null;
         function mostraAccesso(messaggio) {
             document.getElementById('auth-message').textContent = messaggio;
             document.getElementById('auth-gate').hidden = false;
@@ -1728,6 +1825,7 @@
         }
         auth.onAuthStateChanged(user => {
             if (interrompiAscolto) { interrompiAscolto(); interrompiAscolto = null; }
+            if (interrompiWidget) { interrompiWidget(); interrompiWidget = null; }
             document.getElementById('account-bar').hidden = !user;
             if (!user) { mostraAccesso('Accedi con il tuo account Google per utilizzare ChezNous.'); return; }
             if (!user.emailVerified || !accountAutorizzati.includes(user.email)) {
@@ -1736,6 +1834,7 @@
             }
             document.getElementById('auth-gate').hidden = true;
             interrompiAscolto = ascoltaDati();
+            interrompiWidget = ascoltaWidget();
         }, err => { console.error(err); mostraAccesso('Impossibile verificare l’accesso. Ricarica la pagina.'); });
     </script>
 </body>
