@@ -1304,6 +1304,7 @@
                     <div class="finanze-mese-totali">
                         <div>Totale accrediti <strong>+ ${euro(gruppo.accrediti)}</strong></div>
                         <div>Totale addebiti <strong>− ${euro(gruppo.addebiti)}</strong></div>
+                        <div>Totale <strong>${gruppo.accrediti >= gruppo.addebiti ? '+' : '−'} ${euro(Math.abs(gruppo.accrediti - gruppo.addebiti))}</strong></div>
                     </div>
                     ${gruppo.movimenti.map(m => {
                 const isAcc = m.tipo === 'accredito';
