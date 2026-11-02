@@ -14,16 +14,29 @@ service cloud.firestore {
       return request.auth != null
         && get(/databases/$(database)/documents/widgetDevices/$(request.auth.uid)).data.enabled == true;
     }
+    function telefonoCondiviso() {
+      return telefonoAbilitato()
+        && get(/databases/$(database)/documents/widgetDevices/$(request.auth.uid)).data.get('bidirectional', false) == true;
+    }
+    function nuovaVersione() {
+      let path = /databases/$(database)/documents/widgetState/finanze;
+      return getAfter(path).data.version == (exists(path) ? get(path).data.version + 1 : 1);
+    }
     match /varie/contatori {
-      allow get, create, update: if autorizzato();
+      allow get, create: if autorizzato();
+      // Keep the pre-migration finance array as an immutable archive. Other household fields still work.
+      allow update: if autorizzato() && (!resource.data.get('finanze_migrate', false)
+        || (request.resource.data.get('finanze_migrate', false) == true
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['finanze_movimenti'])));
     }
     match /widgetDevices/{uid} {
       // Only the household can approve/revoke a device. A phone can check its own approval.
       allow get: if autorizzato() || (request.auth != null && request.auth.uid == uid);
       allow list: if autorizzato();
       allow create, update: if autorizzato()
-        && request.resource.data.keys().hasOnly(['enabled', 'linkedAt'])
+        && request.resource.data.keys().hasOnly(['enabled', 'linkedAt', 'bidirectional'])
         && request.resource.data.enabled is bool
+        && request.resource.data.get('bidirectional', false) is bool
         && request.resource.data.linkedAt is timestamp;
     }
     match /widgetState/finanze {
@@ -31,9 +44,9 @@ service cloud.firestore {
       allow get: if autorizzato() || telefonoAbilitato();
       allow create: if autorizzato()
         && request.resource.data.keys().hasOnly(['version', 'updatedAt'])
-        && request.resource.data.version == 0
+        && request.resource.data.version in [0, 1]
         && request.resource.data.updatedAt == request.time;
-      allow update: if telefonoAbilitato()
+      allow update: if (autorizzato() || telefonoAbilitato())
         && request.resource.data.keys().hasOnly(['version', 'updatedAt'])
         && request.resource.data.version is int
         && request.resource.data.version == resource.data.version + 1
@@ -42,11 +55,10 @@ service cloud.firestore {
     match /widgetMovements/{id} {
       function valido() {
         let m = request.resource.data;
-        return telefonoAbilitato()
-          && m.keys().hasOnly(['uid', 'sourceId', 'revision', 'active', 'cents', 'date', 'note'])
-          && m.uid == request.auth.uid
+        return m.keys().hasOnly(['uid', 'sourceId', 'revision', 'active', 'cents', 'date', 'note'])
+          && m.uid is string
           && m.sourceId is string
-          && m.sourceId.matches('^[A-Za-z0-9-]{1,64}$')
+          && m.sourceId.matches('^[A-Za-z0-9_-]{1,128}$')
           && id == m.uid + '_' + m.sourceId
           && m.revision is int && m.revision >= 0
           && m.active is bool && m.cents is int
@@ -54,12 +66,15 @@ service cloud.firestore {
           && m.date is string && m.note is string && m.note.size() <= 200
           && ((m.active && m.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
             || (!m.active && m.cents == 0 && m.date == '' && m.note == ''))
-          && getAfter(/databases/$(database)/documents/widgetState/finanze).data.version
-             == get(/databases/$(database)/documents/widgetState/finanze).data.version + 1;
+          && nuovaVersione();
       }
-      allow read: if autorizzato();
-      allow create: if valido();
-      allow update: if valido() && resource.data.uid == request.auth.uid
+      allow read: if autorizzato() || telefonoCondiviso();
+      allow create: if valido() && ((autorizzato() && request.resource.data.uid == 'web')
+        || (telefonoAbilitato() && request.resource.data.uid == request.auth.uid));
+      allow update: if valido() && (autorizzato() || telefonoCondiviso()
+          || (telefonoAbilitato() && resource.data.uid == request.auth.uid))
+        && request.resource.data.uid == resource.data.uid
+        && (resource.data.active || !request.resource.data.active)
         && request.resource.data.sourceId == resource.data.sourceId
         && (request.resource.data == resource.data || request.resource.data.revision > resource.data.revision);
       // Withdrawal is an inactive tombstone, preventing stale retries from restoring an old row.

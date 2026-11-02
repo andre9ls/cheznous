@@ -937,7 +937,7 @@
         <!-- Form Inserimento Spesa / Accredito -->
         <details class="finanze-card" style="margin-bottom: 20px;">
             <summary style="cursor: pointer;">Collega widget MoneyManager</summary>
-            <p style="margin: 12px 0;">Nell’app MoneyManager premi «Collega a ChezNous» e copia qui il codice. Saranno riportati solo i nuovi movimenti Novelli-Racca. Per modificare o eliminare i movimenti del widget usa MoneyManager.</p>
+            <p style="margin: 12px 0;">Nell’app MoneyManager premi «Collega a ChezNous» e copia qui il codice. Il conto Novelli-Racca e lo storico di ChezNous si aggiornano in entrambe le direzioni. Usa MoneyManager 0.7.0 o successivo. Per un telefono già collegato, incolla nuovamente il codice per autorizzare anche la lettura e la modifica delle finanze condivise.</p>
             <label for="widget-code">Codice del telefono</label>
             <input id="widget-code" class="finanze-input-field" autocomplete="off" spellcheck="false" maxlength="128" style="width: 100%; margin: 8px 0;">
             <button type="button" id="widget-link" class="finanze-tipo-btn" onclick="collegaWidget()">Autorizza telefono</button>
@@ -1128,6 +1128,10 @@
         let finanzeMovimenti = [];
         let widgetMovimenti = [];
         let widgetCaricati = false;
+        let finanzeMigrate = false;
+        let migrazioneFinanzeInCorso = false;
+        let editingFinanzeId = null;
+        let editingFinanzeRevision = null;
         const widgetFeed = db.collection('widgetMovements');
         const widgetDevices = db.collection('widgetDevices');
         const widgetState = db.collection('widgetState').doc('finanze');
@@ -1140,10 +1144,90 @@
             const m = doc.data();
             if (m.active !== true || !Number.isSafeInteger(m.cents) || !/^\d{4}-\d{2}-\d{2}$/.test(m.date)) return null;
             const [year, month, day] = m.date.split('-');
-            return { id: 'widget_' + doc.id, tipo: m.cents >= 0 ? 'accredito' : 'spesa',
+            return { id: doc.id, revision: m.revision, tipo: m.cents >= 0 ? 'accredito' : 'spesa',
                 desc: m.note || (m.cents >= 0 ? 'Accredito' : 'Spesa'),
                 importo: Math.abs(m.cents) / 100, data: `${day}/${month}/${year}`,
-                ts: new Date(Number(year), Number(month) - 1, Number(day), 12).getTime(), widget: true };
+                ts: new Date(Number(year), Number(month) - 1, Number(day), 12).getTime(), widget: m.uid !== 'web' };
+        }
+
+
+        function datiFinanza(item) {
+            const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(item.data || '');
+            if (!match || !/^[A-Za-z0-9_-]{1,128}$/.test(item.id)) throw new Error('storico-non-valido');
+            const date = `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+            const parsed = new Date(date + 'T12:00:00');
+            if (Number.isNaN(parsed.getTime()) || parsed.getFullYear() !== Number(match[3]) || parsed.getMonth() + 1 !== Number(match[2]) || parsed.getDate() !== Number(match[1])) throw new Error('storico-non-valido');
+            const cents = Math.round(Number(item.importo) * 100) * (item.tipo === 'accredito' ? 1 : -1);
+            if (!Number.isSafeInteger(cents) || Math.abs(cents) > 10000000000 || String(item.desc || '').length > 200) throw new Error('storico-non-valido');
+            return {uid: 'web', sourceId: item.id, revision: 0, active: true, cents, date, note: item.desc || ''};
+        }
+
+        async function migraFinanze() {
+            if (migrazioneFinanzeInCorso || finanzeMigrate) return;
+            migrazioneFinanzeInCorso = true;
+            renderVerificaSaldo();
+            try {
+                await db.runTransaction(async transaction => {
+                    const original = await transaction.get(docRef);
+                    const state = await transaction.get(widgetState);
+                    if (original.data()?.finanze_migrate === true) return;
+                    const legacy = original.data()?.finanze_movimenti;
+                    if (!Array.isArray(legacy)) throw new Error('storico-non-valido');
+                    if (legacy.length > 450 || new Set(legacy.map(m => m.id)).size !== legacy.length) throw new Error('storico-non-valido');
+                    const rows = legacy.map(datiFinanza);
+                    const targets = rows.map(m => widgetFeed.doc('web_' + m.sourceId));
+                    const existing = [];
+                    for (const ref of targets) existing.push(await transaction.get(ref));
+                    rows.forEach((row, i) => { if (!existing[i].exists) transaction.set(targets[i], row); });
+                    transaction.set(widgetState, {version: (state.data()?.version || 0) + 1,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+                    // Retain the original array as an archive. Its entries now have one shared document each.
+                    transaction.set(docRef, {finanze_migrate: true}, {merge: true});
+                });
+                const snapshot = await widgetFeed.get({source: 'server'});
+                widgetMovimenti = snapshot.docs.map(movimentoWidget).filter(Boolean);
+                finanzeMigrate = true;
+                finanzeMovimenti = [];
+                widgetCaricati = true;
+            } catch (error) {
+                console.error(error);
+                setSyncStatus('❌ Allineamento storico non riuscito. Ricarica la pagina per riprovare.');
+            } finally {
+                migrazioneFinanzeInCorso = false;
+                renderFinanzeUI(finanzeMovimenti);
+            }
+        }
+
+        function finanzePronte() {
+            if (finanzeMigrate && widgetCaricati && !migrazioneFinanzeInCorso) return true;
+            alert('Attendi il caricamento delle finanze condivise e verifica la connessione.');
+            return false;
+        }
+
+        async function scriviFinanza(id, changes, expectedRevision = null) {
+            if (!finanzePronte()) return false;
+            try {
+                await db.runTransaction(async transaction => {
+                    const state = await transaction.get(widgetState);
+                    const target = widgetFeed.doc(id);
+                    const snapshot = await transaction.get(target);
+                    const old = snapshot.data();
+                    if (expectedRevision !== null && (!old || old.revision !== expectedRevision)) throw new Error('conflitto-finanze');
+                    if (old && old.active === false && changes.active !== false) throw new Error('conflitto-finanze');
+                    transaction.set(target, {...(old || {uid: 'web', sourceId: id.slice(4)}), ...changes,
+                        revision: old ? old.revision + 1 : 0});
+                    transaction.set(widgetState, {version: state.data().version + 1,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+                });
+                setSyncStatus('✅ Finanze sincronizzate', 2500);
+                return true;
+            } catch (error) {
+                console.error(error);
+                alert(error.message === 'conflitto-finanze'
+                    ? 'Questo movimento è cambiato o è stato eliminato da un altro dispositivo. La tua modifica non è stata applicata: copia il testo se vuoi conservarlo, poi annulla e riapri il movimento.'
+                    : 'Salvataggio non riuscito. I campi inseriti sono conservati: verifica la connessione e riprova.');
+                return false;
+            }
         }
 
         async function collegaWidget() {
@@ -1155,7 +1239,7 @@
             try {
                 await db.runTransaction(async transaction => {
                     const state = await transaction.get(widgetState);
-                    transaction.set(widgetDevices.doc(code), { enabled: true,
+                    transaction.set(widgetDevices.doc(code), { enabled: true, bidirectional: true,
                         linkedAt: firebase.firestore.FieldValue.serverTimestamp() });
                     if (!state.exists) transaction.set(widgetState, { version: 0,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
@@ -1167,7 +1251,7 @@
         }
 
         async function revocaWidget(uid) {
-            if (!confirm('Interrompere l’invio da questo telefono? I movimenti già ricevuti resteranno nelle Finanze.')) return;
+            if (!confirm('Interrompere la sincronizzazione con questo telefono? I movimenti già ricevuti resteranno nelle Finanze.')) return;
             try { await widgetDevices.doc(uid).update({ enabled: false }); }
             catch (error) { console.error(error); document.getElementById('widget-status').textContent = 'Revoca non riuscita. Riprova.'; }
         }
@@ -1188,11 +1272,11 @@
                 const container = document.getElementById('widget-devices');
                 container.replaceChildren();
                 document.getElementById('widget-status').textContent = snapshot.empty
-                    ? 'Nessun telefono collegato.' : 'Invio limitato al conto Novelli-Racca.';
+                    ? 'Nessun telefono collegato.' : 'Sincronizzazione limitata al conto Novelli-Racca.';
                 snapshot.docs.forEach(doc => {
                     const row = document.createElement('p');
                     row.style.marginTop = '12px';
-                    row.append(document.createTextNode('Telefono …' + doc.id.slice(-6) + (doc.data().enabled ? ' · Attivo ' : ' · Revocato')));
+                    row.append(document.createTextNode('Telefono …' + doc.id.slice(-6) + (doc.data().enabled ? (doc.data().bidirectional ? ' · Bidirezionale ' : ' · Solo invio: riautorizza il codice ') : ' · Revocato')));
                     if (doc.data().enabled) {
                         const button = document.createElement('button');
                         button.type = 'button'; button.className = 'finanze-tipo-btn'; button.textContent = 'Revoca';
@@ -1218,7 +1302,7 @@
         function renderVerificaSaldo() {
             const button = document.getElementById('finanze-verifica-btn');
             const status = document.getElementById('finanze-ultima-verifica');
-            button.disabled = !finanzeCaricate || !widgetCaricati || verificaInCorso;
+            button.disabled = !finanzeCaricate || !widgetCaricati || !finanzeMigrate || migrazioneFinanzeInCorso || verificaInCorso;
             button.textContent = verificaInCorso ? 'Salvataggio verifica…' : '✅ Il saldo coincide con la banca';
             const verifica = verificaSaldoInAttesa || finanzeVerifica;
             const date = verifica?.data?.toDate?.();
@@ -1254,7 +1338,7 @@
                 await db.runTransaction(async transaction => {
                     const snapshot = await transaction.get(docRef);
                     const state = await transaction.get(widgetState);
-                    const movimenti = snapshot.data()?.finanze_movimenti;
+                    const movimenti = snapshot.data()?.finanze_migrate ? [] : snapshot.data()?.finanze_movimenti;
                     if (state.data()?.version !== before.data()?.version || !Array.isArray(movimenti)
                         || saldoInCentesimi([...movimenti, ...imported]) !== saldoConfermato) {
                         throw new Error('saldo-cambiato');
@@ -1297,46 +1381,31 @@
             }
         }
 
-        function aggiungiTransazione() {
+        async function aggiungiTransazione() {
+            if (!finanzePronte()) return;
             const descEl = document.getElementById('finanze-desc');
             const impEl = document.getElementById('finanze-importo');
-            const desc = (descEl.value || '').trim();
-            const val = parseFloat(impEl.value);
-
-            if (isNaN(val) || val <= 0) {
-                alert('Inserisci un importo valido maggiore di zero.');
-                return;
+            const cents = Math.round(Number(impEl.value) * 100);
+            if (!Number.isSafeInteger(cents) || cents <= 0 || cents > 10000000000 || descEl.value.trim().length > 200) {
+                alert('Inserisci un importo valido e una descrizione di massimo 200 caratteri.'); return;
             }
-
-            const ora = new Date();
-            const dataStr = ora.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const item = {
-                id: Date.now().toString(),
-                tipo: currentFinanzeTipo,
-                desc: desc || (currentFinanzeTipo === 'spesa' ? 'Spesa' : 'Accredito'),
-                importo: Math.round(val * 100) / 100,
-                data: dataStr,
-                ts: Date.now()
-            };
-
-            finanzeMovimenti.unshift(item);
-            descEl.value = '';
-            impEl.value = '';
-
-            renderFinanzeUI(finanzeMovimenti);
-
-            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
-                .then(() => setSyncStatus('✅ Salvato', 2000))
-                .catch(() => setSyncStatus('❌ Errore salvataggio'));
+            const button = document.querySelector('.finanze-form button[onclick="aggiungiTransazione()"]');
+            if (button.disabled) return;
+            button.disabled = true;
+            const date = new Date().toLocaleDateString('sv-SE');
+            try {
+                if (await scriviFinanza('web_' + crypto.randomUUID(), {active: true, cents: currentFinanzeTipo === 'accredito' ? cents : -cents,
+                    date, note: descEl.value.trim() || (currentFinanzeTipo === 'spesa' ? 'Spesa' : 'Accredito')})) {
+                    descEl.value = ''; impEl.value = '';
+                }
+            } finally { button.disabled = false; }
         }
 
-        function eliminaTransazione(id) {
-            if (!confirm('Eliminare questo movimento?')) return;
-            finanzeMovimenti = finanzeMovimenti.filter(m => m.id !== id);
-            renderFinanzeUI(finanzeMovimenti);
-            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
-                .then(() => setSyncStatus('✅ Salvato', 2000))
-                .catch(() => setSyncStatus('❌ Errore salvataggio'));
+        async function eliminaTransazione(id) {
+            if (!finanzePronte() || !confirm('Eliminare questo movimento anche dagli altri dispositivi collegati?')) return;
+            const m = tuttiMovimentiFinanze().find(x => x.id === id);
+            if (!m) return;
+            await scriviFinanza(id, {active: false, cents: 0, date: '', note: ''}, m.revision);
         }
 
         function raggruppaMovimentiPerMese(movimenti) {
@@ -1364,6 +1433,7 @@
         }
 
         function renderFinanzeUI(movimenti) {
+            if (migrazioneFinanzeInCorso) return;
             movimenti = [...(movimenti || []), ...widgetMovimenti];
             const saldoEl = document.getElementById('finanze-saldo');
             const entrateEl = document.getElementById('finanze-tot-entrate');
@@ -1388,6 +1458,7 @@
             entrateEl.textContent = '+ ' + totEntrate.toLocaleString('it-IT', { useGrouping: true, minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
             usciteEl.textContent = '- ' + totUscite.toLocaleString('it-IT', { useGrouping: true, minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
+            if (editingFinanzeId) return;
             if (!movimenti || movimenti.length === 0) {
                 listaEl.innerHTML = '<div style="text-align: center; color: #777; font-size: 0.9rem; padding: 12px 0;">Nessun movimento registrato</div>';
                 return;
@@ -1415,9 +1486,9 @@
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <b style="color: ${col}; font-size: 1rem;">${sgn} ${impFmt} €</b>
-                            ${m.widget ? '<span style="font-size: 0.75rem; opacity: 0.65;">Gestisci nell’app</span>' : `
+
                             <button class="finanze-del-btn" title="Modifica" onclick="apriEditRow('${m.id}')">✏️</button>
-                            <button class="finanze-del-btn" title="Elimina" onclick="eliminaTransazione('${m.id}')">✕</button>`}
+                            <button class="finanze-del-btn" title="Elimina" onclick="eliminaTransazione('${m.id}')">✕</button>
                         </div>
                     </div>
                 `;
@@ -1427,16 +1498,19 @@
         }
 
         function apriEditRow(id) {
-            const m = finanzeMovimenti.find(x => x.id === id);
+            const m = tuttiMovimentiFinanze().find(x => x.id === id);
             if (!m) return;
             const row = document.getElementById('row-' + id);
             if (!row) return;
+            editingFinanzeId = id;
+            editingFinanzeRevision = m.revision;
             const impVal = m.importo.toFixed(2).replace('.', ',');
             const isAcc = m.tipo === 'accredito';
             row.innerHTML = `
                 <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                    <input id="edit-desc-${id}" type="text" value="${m.desc.replace(/"/g, '&quot;')}"
+                    <input id="edit-desc-${id}" type="text" value="${escapeHTML(m.desc)}"
                         style="border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 0.9rem; width: 100%; box-sizing: border-box;" />
+                    <input id="edit-data-${id}" type="date" value="${m.data.split('/').reverse().join('-')}" aria-label="Data movimento" />
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <input id="edit-imp-${id}" type="text" inputmode="decimal" value="${impVal}"
                             style="border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 0.9rem; width: 100px;" />
@@ -1449,38 +1523,31 @@
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 6px; margin-left: 10px;">
                     <button class="finanze-del-btn" style="background:#4a8f5e;color:#fff;" onclick="salvaEditRow('${id}')">✔</button>
-                    <button class="finanze-del-btn" onclick="renderFinanzeUI(finanzeMovimenti)">✕</button>
+                    <button class="finanze-del-btn" onclick="annullaEditFinanza()">✕</button>
                 </div>
             `;
             document.getElementById('edit-desc-' + id).focus();
         }
 
-        function salvaEditRow(id) {
-            const descEl = document.getElementById('edit-desc-' + id);
-            const impEl  = document.getElementById('edit-imp-'  + id);
-            const tipoEl = document.getElementById('edit-tipo-' + id);
-            if (!descEl || !impEl || !tipoEl) return;
+        async function salvaEditRow(id) {
+            const desc = document.getElementById('edit-desc-' + id).value.trim();
+            const cents = Math.round(Number(document.getElementById('edit-imp-' + id).value.replace(',', '.')) * 100);
+            const tipo = document.getElementById('edit-tipo-' + id).value;
+            const date = document.getElementById('edit-data-' + id).value;
+            if (!desc || desc.length > 200 || !Number.isSafeInteger(cents) || cents <= 0 || cents > 10000000000 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+                alert('Controlla descrizione, importo e data.'); return;
+            }
+            if (await scriviFinanza(id, {active: true, cents: tipo === 'accredito' ? cents : -cents, date, note: desc}, editingFinanzeRevision)) annullaEditFinanza();
+        }
 
-            const nuovaDesc = descEl.value.trim();
-            const nuovoImporto = parseFloat(impEl.value.replace(',', '.'));
-            const nuovoTipo = tipoEl.value;
-
-            if (!nuovaDesc) { alert('La descrizione non può essere vuota.'); return; }
-            if (isNaN(nuovoImporto) || nuovoImporto <= 0) { alert('Importo non valido.'); return; }
-
-            finanzeMovimenti = finanzeMovimenti.map(x =>
-                x.id === id
-                    ? { ...x, desc: nuovaDesc, importo: Math.round(nuovoImporto * 100) / 100, tipo: nuovoTipo }
-                    : x
-            );
-
+        function annullaEditFinanza() {
+            editingFinanzeId = null;
+            editingFinanzeRevision = null;
             renderFinanzeUI(finanzeMovimenti);
-            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
-                .then(() => setSyncStatus('✅ Salvato', 2000))
-                .catch(() => setSyncStatus('❌ Errore salvataggio'));
         }
 
         function rettificaSaldo() {
+            if (!finanzePronte()) return;
             let totEntrate = 0;
             let totUscite = 0;
             tuttiMovimentiFinanze().forEach(m => {
@@ -1512,11 +1579,9 @@
                 ts: Date.now()
             };
 
-            finanzeMovimenti.unshift(item);
-            renderFinanzeUI(finanzeMovimenti);
-            docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true })
-                .then(() => setSyncStatus('✅ Salvato', 2000))
-                .catch(() => setSyncStatus('❌ Errore salvataggio'));
+            const payload = datiFinanza(item);
+            delete payload.uid; delete payload.sourceId; delete payload.revision;
+            scriviFinanza('web_' + crypto.randomUUID(), payload);
         }
 
         // I clic vengono mostrati subito; Firestore resta la fonte dei valori confermati.
@@ -1548,22 +1613,9 @@
                     el.value = (data && data[k] !== undefined) ? data[k] : '';
                 }
             });
-            if (data && Array.isArray(data.finanze_movimenti)) {
-                finanzeMovimenti = data.finanze_movimenti;
-            } else {
-                // Impostazione saldo iniziale comunicato: 2101,24 €
-                const ora = new Date();
-                const dataStr = ora.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                finanzeMovimenti = [{
-                    id: 'saldo_iniziale',
-                    tipo: 'accredito',
-                    desc: 'Saldo iniziale',
-                    importo: 2101.24,
-                    data: dataStr,
-                    ts: Date.now()
-                }];
-                docRef.set({ finanze_movimenti: finanzeMovimenti }, { merge: true });
-            }
+            finanzeMigrate = data?.finanze_migrate === true;
+            finanzeMovimenti = finanzeMigrate ? [] : (Array.isArray(data?.finanze_movimenti) ? data.finanze_movimenti : []);
+            if (!finanzeMigrate) migraFinanze();
             renderFinanzeUI(finanzeMovimenti);
             if (document.getElementById('stats-modal').open) renderStats();
             // Aggiorna conteggi nei risultati di ricerca se visibili

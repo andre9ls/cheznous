@@ -1,58 +1,40 @@
-# Accesso Firebase di ChezNous
+# Finanze condivise ChezNous ↔ MoneyManager 0.7.0
 
-Il sito usa Firebase Authentication con Google. Le regole di `firestore.rules`
-consentono lettura del documento e creazione/aggiornamento di `varie/contatori`
-solo ai due account Google verificati autorizzati. Tutti gli altri percorsi,
-le query di raccolta e la cancellazione del documento sono negati.
+## Versione 0.7.0
+La sincronizzazione bidirezionale usa queste regole e questa pagina. I telefoni già collegati in modalità solo invio richiedono un nuovo abbinamento del codice per ottenere la lettura e la modifica delle finanze condivise.
 
-## Configurazione console
+## Accesso
+Gli account Google verificati già autorizzati mantengono l’accesso al documento domestico `varie/contatori`.
 
-- Progetto: `cheznous-2ce52`.
-- Authentication → Metodo di accesso: Google abilitato.
-- Authentication → Impostazioni → Domini autorizzati: `andre9ls.github.io`.
-- Firestore → Regole: pubblicare il contenuto esatto di `firestore.rules`.
+I telefoni anonimi sono registrati in `widgetDevices/{uid}`. `enabled: true` consente il precedente invio dei propri movimenti; **solo** `bidirectional: true`, impostato esplicitamente dalla pagina abbinando nuovamente il codice, consente anche la lettura e la modifica dell’intero archivio finanziario condiviso. Il telefono non accede a inventario, note domestiche o documenti di altri dispositivi.
 
-Le regole non hanno scadenza. Non ripristinare la modalità test.
-La verifica nel codice del sito serve all’interfaccia: la protezione dei dati
-è applicata dalle regole pubblicate su Firebase.
+Revocare un telefono imposta `enabled: false` e blocca sia letture sia scritture successive sul server. Le copie già ricevute restano sul telefono.
 
-Per modificare gli account autorizzati, aggiornare sia `firestore.rules` sia
-`accountAutorizzati` in `index.html`, verificare e pubblicare entrambi.
-Con Firebase CLI autenticata, le regole si pubblicano con:
+## Archivio e migrazione
+La pagina copia una sola volta l’array storico `finanze_movimenti` in documenti con ID stabili `widgetMovements/web_{idOriginale}`. L’operazione è atomica e idempotente; dopo la copia imposta `varie/contatori.finanze_migrate: true`. L’array originale viene conservato immutato come archivio; le regole impediscono ai vecchi client di modificarlo dopo la migrazione. I contatori e le note domestiche continuano a funzionare.
 
-```sh
-firebase deploy --only firestore:rules --project cheznous-2ce52
-```
+La pagina e il telefono condividono da quel momento la stessa raccolta `widgetMovements`. Non si applica più una somma fra un array e una copia dello stesso storico. I documenti già provenienti da MoneyManager mantengono i loro ID e vengono aggiornati direttamente dal sito.
 
-Il sito rimane pubblicato su GitHub Pages; il push del sito non pubblica
-le regole Firestore. Non è stato aggiunto supporto offline con questa modifica.
+Il telefono importa tutto lo storico condiviso nel conto Novelli-Racca. Il vecchio storico locale precedente all’abbinamento è conservato in un archivio separato, consultabile nell’app ed escluso dai totali condivisi. Il conto Novelli personale resta separato.
 
+## Revisioni, cancellazioni e conflitti
+Ogni scrittura usa una transazione Firestore e incrementa anche `widgetState/finanze.version`. La verifica del saldo confronta questa versione per rifiutare una conferma obsoleta.
 
-## Widget MoneyManager (0.6.0)
+Un elemento eliminato diventa un marcatore inattivo con importo, data e nota oscurati. Non può essere ripristinato da una copia obsoleta. Uno spostamento sul conto personale ritira la copia condivisa senza inviare i nuovi dati personali; un successivo nuovo inserimento condiviso usa un altro documento.
 
-Abilitare anche Authentication → Metodo di accesso → Anonimo, senza pulizia
-automatica. L’accesso anonimo serve esclusivamente per identificare ogni
-installazione del widget. Non concede accesso al documento domestico.
+In caso di modifiche concorrenti prevale la prima versione confermata dal server. Sul sito una modifica basata su una revisione superata viene rifiutata mantenendo i campi aperti. Nell’app la modifica locale viene conservata nel riquadro «Modifiche da rivedere»; è possibile mantenere la versione condivisa oppure creare esplicitamente un nuovo movimento dalla copia locale. Le eliminazioni prevalgono sulle modifiche obsolete.
 
-Un utente Google già autorizzato abbina il telefono tramite il codice mostrato
-nell’app, da Finanze → Collega widget MoneyManager. L’abbinamento crea un
-documento `widgetDevices/{uid}` con `enabled: true`. La revoca imposta false;
-i movimenti già ricevuti rimangono visibili.
+## Android
+Room passa alla versione 3 mantenendo i movimenti e aggiungendo tabelle per collegamenti, conflitti e archivio locale. Non installare APK più vecchi dopo l’aggiornamento e non disinstallare l’app per aggiornarla.
 
-Il telefono invia solo nuovi movimenti del conto Novelli-Racca, escludendo
-lo storico presente al primo collegamento e i saldi iniziali. Scrive documenti
-con ID stabile `widgetMovements/{uid}_{idMovimento}` e revisioni crescenti.
-Modifiche, eliminazioni e trasferimenti al conto personale si gestiscono
-in MoneyManager. Le rimozioni sono marcatori inattivi privi di importo,
-data e nota; non si cancellano fisicamente.
+La pagina riceve gli aggiornamenti in tempo reale. Con l’app aperta il telefono ascolta la versione delle finanze e richiede una sincronizzazione; in background usa WorkManager, con controlli periodici di circa 15 minuti soggetti alle restrizioni Android. «Sincronizza» forza un tentativo appena la rete è disponibile. Le modifiche locali sono salvate offline; il sito richiede rete per confermare le transazioni e conserva i campi in caso di errore.
 
-Ogni scrittura aggiorna nella stessa transazione `widgetState/finanze.version`.
-La versione impedisce che una modifica contemporanea al flusso del widget
-produca una verifica del saldo obsoleta. Le regole non consentono al telefono
-di leggere movimenti, elencare dispositivi o accedere a `varie/contatori`.
-Solo i due account Google autorizzati leggono il flusso e gestiscono gli abbinamenti.
+## Pubblicazione e abbinamento
+1. Pubblicare le nuove regole del progetto `cheznous-2ce52`.
+2. Pubblicare il nuovo `index.html` sul ramo main di ChezNous.
+3. Ricaricare ChezNous: lo storico viene migrato automaticamente una sola volta.
+4. Installare `MoneyManager-0.7.0-cheznous-bidirectional-debug.apk` come aggiornamento.
+5. Copiare il codice mostrato dall’app e riautorizzarlo in Finanze → Collega widget MoneyManager, anche se era già collegato in modalità solo invio.
+6. Premere Sincronizza nell’app. Verificare il conto Novelli-Racca, lo storico e i totali.
 
-Pubblicare le regole aggiornate prima della pagina. I movimenti del widget
-vengono combinati in lettura con `finanze_movimenti`; non vengono copiati
-nell’array storico del documento domestico. La pagina riceve gli aggiornamenti
-anche se era chiusa al momento dell’inserimento.
+La pubblicazione di GitHub Pages non pubblica le regole Firebase. La conferma delle autorizzazioni cloud è richiesta separatamente dal controllo di sicurezza del browser.
