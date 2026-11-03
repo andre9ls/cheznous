@@ -934,16 +934,22 @@
             <p id="finanze-ultima-verifica" role="status" style="font-size: 0.85rem; line-height: 1.5; margin-top: 12px;">In attesa dei dati…</p>
         </div>
 
+        <section class="finanze-card" style="margin-bottom: 20px;" aria-labelledby="widget-title">
+            <h3 id="widget-title" style="font-size: 1rem; margin: 0;">Collegamento MoneyManager</h3>
+            <p id="widget-status" role="status" style="margin: 12px 0;">Caricamento collegamenti…</p>
+            <details>
+                <summary style="cursor: pointer;">Configura collegamento e dettagli</summary>
+                <p style="margin: 12px 0;">In MoneyManager apri i dettagli del collegamento ChezNous e copia il codice. Incollalo qui per condividere i movimenti del conto Novelli-Racca.</p>
+                <label for="widget-code">Codice del telefono</label>
+                <input id="widget-code" class="finanze-input-field" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="Incolla il codice da MoneyManager" style="width: 100%; margin: 8px 0;">
+                <button type="button" id="widget-link" class="finanze-tipo-btn" onclick="collegaWidget()">Collega telefono</button>
+                <p id="widget-link-status" role="status" style="margin-top: 12px;"></p>
+                <p style="margin-top: 12px; font-size: 0.85rem;">Dopo il collegamento, premi «Verifica e sincronizza ora» nell’app. Il conto e lo storico di ChezNous si aggiornano in entrambe le direzioni.</p>
+                <div id="widget-devices"></div>
+            </details>
+        </section>
+
         <!-- Form Inserimento Spesa / Accredito -->
-        <details class="finanze-card" style="margin-bottom: 20px;">
-            <summary style="cursor: pointer;">Collega widget MoneyManager</summary>
-            <p style="margin: 12px 0;">Nell’app MoneyManager premi «Collega a ChezNous» e copia qui il codice. Il conto Novelli-Racca e lo storico di ChezNous si aggiornano in entrambe le direzioni. Usa MoneyManager 0.7.0 o successivo. Per un telefono già collegato, incolla nuovamente il codice per autorizzare anche la lettura e la modifica delle finanze condivise.</p>
-            <label for="widget-code">Codice del telefono</label>
-            <input id="widget-code" class="finanze-input-field" autocomplete="off" spellcheck="false" maxlength="128" style="width: 100%; margin: 8px 0;">
-            <button type="button" id="widget-link" class="finanze-tipo-btn" onclick="collegaWidget()">Autorizza telefono</button>
-            <p id="widget-status" role="status" style="margin-top: 12px;">Caricamento collegamenti…</p>
-            <div id="widget-devices"></div>
-        </details>
 
         <div class="finanze-form">
             <div class="finanze-tipo-toggle">
@@ -1243,7 +1249,7 @@
 
         async function collegaWidget() {
             const code = document.getElementById('widget-code').value.trim();
-            const status = document.getElementById('widget-status');
+            const status = document.getElementById('widget-link-status');
             if (!/^[A-Za-z0-9_-]{20,128}$/.test(code)) { status.textContent = 'Copia il codice completo mostrato nell’app MoneyManager.'; return; }
             const button = document.getElementById('widget-link');
             button.disabled = true;
@@ -1256,8 +1262,8 @@
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
                 });
                 document.getElementById('widget-code').value = '';
-                status.textContent = 'Telefono autorizzato. Premi Sincronizza in MoneyManager per avviare l’invio.';
-            } catch (error) { console.error(error); status.textContent = 'Collegamento non riuscito. Verifica connessione e configurazione Firebase.'; }
+                status.textContent = 'Telefono collegato. Premi «Verifica e sincronizza ora» in MoneyManager.';
+            } catch (error) { console.error(error); status.textContent = 'Collegamento non riuscito. Controlla la connessione e riprova.'; }
             finally { button.disabled = false; }
         }
 
@@ -1282,15 +1288,20 @@
             const stopDevices = widgetDevices.onSnapshot(snapshot => {
                 const container = document.getElementById('widget-devices');
                 container.replaceChildren();
-                document.getElementById('widget-status').textContent = snapshot.empty
-                    ? 'Nessun telefono collegato.' : 'Sincronizzazione limitata al conto Novelli-Racca.';
+                const enabled = snapshot.docs.filter(doc => doc.data().enabled);
+                const shared = enabled.filter(doc => doc.data().bidirectional);
+                document.getElementById('widget-status').textContent = enabled.length === 0
+                    ? 'Nessun telefono collegato.'
+                    : shared.length === enabled.length
+                        ? (enabled.length === 1 ? '1 telefono autorizzato' : enabled.length + ' telefoni autorizzati') + ' · Conto Novelli-Racca condiviso.'
+                        : 'Collegamento da aggiornare: inserisci di nuovo il codice nei dettagli.';
                 snapshot.docs.forEach(doc => {
                     const row = document.createElement('p');
                     row.style.marginTop = '12px';
-                    row.append(document.createTextNode('Telefono …' + doc.id.slice(-6) + (doc.data().enabled ? (doc.data().bidirectional ? ' · Bidirezionale ' : ' · Solo invio: riautorizza il codice ') : ' · Revocato')));
+                    row.append(document.createTextNode('Telefono …' + doc.id.slice(-6) + (doc.data().enabled ? (doc.data().bidirectional ? ' · Autorizzato ' : ' · Da aggiornare ') : ' · Revocato')));
                     if (doc.data().enabled) {
                         const button = document.createElement('button');
-                        button.type = 'button'; button.className = 'finanze-tipo-btn'; button.textContent = 'Revoca';
+                        button.type = 'button'; button.className = 'finanze-tipo-btn'; button.textContent = 'Scollega';
                         button.onclick = () => revocaWidget(doc.id); row.append(button);
                     }
                     container.append(row);
