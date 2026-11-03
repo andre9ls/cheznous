@@ -628,6 +628,7 @@
         .pianta-card button { padding: 9px 14px; border-radius: 8px; border: 1px solid #767a60; background: var(--color-green); color: #000; cursor: pointer; }
         .pianta-scaduta { border-left: 4px solid #a44532; }
         .pianta-oggi { border-left: 4px solid #8b671c; }
+        .pianta-domani { border-left: 4px solid #c49b19; background: #fff3c4; }
         #auth-gate { position: fixed; inset: 0; z-index: 20000; display: grid; place-items: center; background: #f5f1eb; padding: 24px; }
         #auth-gate[hidden] { display: none; }
         .auth-card { max-width: 420px; text-align: center; background: white; padding: 32px; border-radius: 20px; box-shadow: 0 8px 32px #0002; }
@@ -1390,7 +1391,9 @@
             const content = document.getElementById('piante-content');
             content.replaceChildren();
             const oggi = oggiPiante();
+            const domani = prossimaInnaffiatura(oggi, 1);
             let scadute = 0;
+            let daInnaffiareDomani = 0;
             for (const zona of [...new Set(PIANTE_INIZIALI.map(p => p.zona))]) {
                 const section = document.createElement('section'); section.className = 'piante-zona';
                 const title = document.createElement('h3'); title.textContent = zona; section.append(title);
@@ -1399,6 +1402,7 @@
                     const p = datiPianta(base);
                     const card = document.createElement('article'); card.className = 'pianta-card';
                     if (p.prossima <= oggi) { scadute++; card.classList.add(p.prossima < oggi ? 'pianta-scaduta' : 'pianta-oggi'); }
+                    if (p.prossima === domani) { daInnaffiareDomani++; card.classList.add('pianta-domani'); }
                     const name = document.createElement('h4'); name.textContent = p.nome; card.append(name);
                     for (const [campo, testo, tipo, valore] of [['ultima', 'Ultima innaffiatura', 'date', p.ultima], ['frequenza', 'Frequenza (giorni)', 'number', p.frequenza]]) {
                         const label = document.createElement('label'); label.textContent = testo;
@@ -1414,7 +1418,7 @@
                     }
                     const next = document.createElement('p');
                     const date = new Date(p.prossima + 'T12:00:00Z').toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
-                    next.textContent = 'Prossima: ' + date + (p.prossima < oggi ? ' · Da innaffiare' : p.prossima === oggi ? ' · Oggi' : ''); card.append(next);
+                    next.textContent = 'Prossima: ' + date + (p.prossima < oggi ? ' · Da innaffiare' : p.prossima === oggi ? ' · Oggi' : p.prossima === domani ? ' · Da innaffiare domani' : ''); card.append(next);
                     if (p.nota) { const note = document.createElement('p'); note.textContent = '💧 ' + p.nota; card.append(note); }
                     const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Innaffiata oggi';
                     button.addEventListener('click', () => salvaPianta(p.id, 'ultima', oggiPiante(), button)); card.append(button);
@@ -1422,7 +1426,7 @@
                 }
                 content.append(section);
             }
-            document.getElementById('piante-riepilogo').textContent = `${PIANTE_INIZIALI.length} piante · ${scadute} da innaffiare entro oggi`;
+            document.getElementById('piante-riepilogo').textContent = `${PIANTE_INIZIALI.length} piante · ${scadute} da innaffiare entro oggi · ${daInnaffiareDomani} da innaffiare domani`;
         }
         async function salvaPianta(id, campo, valore, control) {
             control.disabled = true;
