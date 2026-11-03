@@ -618,6 +618,16 @@
         .finanze-mese-totali strong { display: block; margin-top: 6px; font-size: 1.1rem; }
         .finanze-mese .finanze-item { gap: 12px; flex-wrap: wrap; }
         .finanze-mese .finanze-item > div:first-child { min-width: 120px; overflow-wrap: anywhere; }
+        .piante-zona { margin: 24px 0; }
+        .piante-zona h3 { margin-bottom: 12px; }
+        .piante-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+        .pianta-card { padding: 16px; border-radius: 14px; background: var(--color-surface); }
+        .pianta-card h4 { margin-bottom: 12px; }
+        .pianta-card label { display: block; margin: 10px 0; font-size: .9rem; }
+        .pianta-card input { display: block; margin-top: 5px; padding: 8px; width: 100%; min-width: 0; border: 1px solid #8a806f; border-radius: 8px; background: var(--color-beige); font-size: 1rem; color: #000; }
+        .pianta-card button { padding: 9px 14px; border-radius: 8px; border: 1px solid #767a60; background: var(--color-green); color: #000; cursor: pointer; }
+        .pianta-scaduta { border-left: 4px solid #a44532; }
+        .pianta-oggi { border-left: 4px solid #8b671c; }
         #auth-gate { position: fixed; inset: 0; z-index: 20000; display: grid; place-items: center; background: #f5f1eb; padding: 24px; }
         #auth-gate[hidden] { display: none; }
         .auth-card { max-width: 420px; text-align: center; background: white; padding: 32px; border-radius: 20px; box-shadow: 0 8px 32px #0002; }
@@ -659,10 +669,20 @@
             <button class="nav-btn" onclick="apriVarie()">🛠️ Varie</button>
 
             <button class="nav-btn">🍽️ Cene</button>
-            <button class="nav-btn">🪴 Piante</button>
+            <button class="nav-btn" onclick="apriPiante()">🪴 Piante</button>
             <button class="nav-btn" onclick="apriStats()">📊 Stats</button>
         </div>
     </main>
+
+    <dialog id="piante-modal" class="stats-dialog" aria-labelledby="piante-title">
+        <div class="panel-header">
+            <h2 id="piante-title">🪴 Piante</h2>
+            <button type="button" class="panel-home" aria-label="Torna alla homepage" title="Torna alla homepage" onclick="this.closest('dialog').close()">X</button>
+        </div>
+        <p>Modifica l’ultima innaffiatura o la frequenza: la prossima data si aggiorna automaticamente.</p>
+        <p id="piante-riepilogo" role="status"></p>
+        <div id="piante-content"></div>
+    </dialog>
 
     <dialog id="stats-modal" class="stats-dialog" aria-labelledby="stats-title">
         <div class="panel-header">
@@ -1058,6 +1078,365 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const docRef = db.collection('varie').doc('contatori');
+
+        // Importazione della scheda Piante; le modifiche successive sono condivise su ChezNous.
+        const PIANTE_INIZIALI = [
+            {
+                        "id": "pianta_3",
+                        "zona": "Bagno",
+                        "nome": "Sanseveria",
+                        "ultima": "2026-10-18",
+                        "frequenza": 21,
+                        "prossima": "2026-11-08",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_4",
+                        "zona": "Bagno",
+                        "nome": "Pothus Pensile",
+                        "ultima": "2026-10-31",
+                        "frequenza": 5,
+                        "prossima": "2026-11-05",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_5",
+                        "zona": "Bagno",
+                        "nome": "Pothus Mensola",
+                        "ultima": "2026-10-31",
+                        "frequenza": 5,
+                        "prossima": "2026-11-05",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_7",
+                        "zona": "Ingresso",
+                        "nome": "Pothus",
+                        "ultima": "2026-10-31",
+                        "frequenza": 5,
+                        "prossima": "2026-11-05",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_9",
+                        "zona": "Salotto",
+                        "nome": "Ficus Elastica",
+                        "ultima": "2026-10-31",
+                        "frequenza": 14,
+                        "prossima": "2026-11-14",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_10",
+                        "zona": "Salotto",
+                        "nome": "Monstera",
+                        "ultima": "2026-10-28",
+                        "frequenza": 17,
+                        "prossima": "2026-11-14",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_11",
+                        "zona": "Salotto",
+                        "nome": "Cactus Coppia",
+                        "ultima": "2026-10-31",
+                        "frequenza": 30,
+                        "prossima": "2026-11-30",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_12",
+                        "zona": "Salotto",
+                        "nome": "Sanseveria Trapuntata",
+                        "ultima": "2026-10-18",
+                        "frequenza": 21,
+                        "prossima": "2026-11-08",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_13",
+                        "zona": "Salotto",
+                        "nome": "Strelitzia",
+                        "ultima": "2026-10-31",
+                        "frequenza": 7,
+                        "prossima": "2026-11-07",
+                        "nota": "Un Litro"
+            },
+            {
+                        "id": "pianta_14",
+                        "zona": "Salotto",
+                        "nome": "Aloe",
+                        "ultima": "2026-11-02",
+                        "frequenza": 14,
+                        "prossima": "2026-11-16",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_15",
+                        "zona": "Salotto",
+                        "nome": "Fittonia",
+                        "ultima": "2026-11-02",
+                        "frequenza": 4,
+                        "prossima": "2026-11-06",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_16",
+                        "zona": "Salotto",
+                        "nome": "Caffè Tazza",
+                        "ultima": "2026-11-02",
+                        "frequenza": 6,
+                        "prossima": "2026-11-08",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_17",
+                        "zona": "Salotto",
+                        "nome": "Orchidea Piccola",
+                        "ultima": "2026-10-31",
+                        "frequenza": 3,
+                        "prossima": "2026-11-03",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_19",
+                        "zona": "Cappa",
+                        "nome": "Sanseveria Mamma",
+                        "ultima": "2026-10-22",
+                        "frequenza": 21,
+                        "prossima": "2026-11-12",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_20",
+                        "zona": "Cappa",
+                        "nome": "Sanseveria Vetro",
+                        "ultima": "2026-10-31",
+                        "frequenza": 30,
+                        "prossima": "2026-11-30",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_22",
+                        "zona": "Cucina",
+                        "nome": "Orchidea Miki",
+                        "ultima": "2026-10-31",
+                        "frequenza": 7,
+                        "prossima": "2026-11-07",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_23",
+                        "zona": "Cucina",
+                        "nome": "Orchidea Andre",
+                        "ultima": "2026-10-31",
+                        "frequenza": 7,
+                        "prossima": "2026-11-07",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_24",
+                        "zona": "Cucina",
+                        "nome": "Bonsai",
+                        "ultima": "2026-10-28",
+                        "frequenza": 30,
+                        "prossima": "2026-11-27",
+                        "nota": "Mezzo Litro"
+            },
+            {
+                        "id": "pianta_25",
+                        "zona": "Cucina",
+                        "nome": "Dracaena",
+                        "ultima": "2026-10-31",
+                        "frequenza": 7,
+                        "prossima": "2026-11-07",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_27",
+                        "zona": "Scaletta",
+                        "nome": "Cactus Alluminio",
+                        "ultima": "2026-10-28",
+                        "frequenza": 30,
+                        "prossima": "2026-11-27",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_28",
+                        "zona": "Scaletta",
+                        "nome": "Cactus Legno",
+                        "ultima": "2026-10-28",
+                        "frequenza": 30,
+                        "prossima": "2026-11-27",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_29",
+                        "zona": "Scaletta",
+                        "nome": "Cactus Halloween",
+                        "ultima": "2026-10-28",
+                        "frequenza": 30,
+                        "prossima": "2026-11-27",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_30",
+                        "zona": "Scaletta",
+                        "nome": "Orchidea Acqua",
+                        "ultima": "2026-10-28",
+                        "frequenza": 7,
+                        "prossima": "2026-11-04",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_31",
+                        "zona": "Scaletta",
+                        "nome": "Euphorbia Lactea",
+                        "ultima": "2026-10-08",
+                        "frequenza": 30,
+                        "prossima": "2026-11-07",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_32",
+                        "zona": "Scaletta",
+                        "nome": "Caffè Grande",
+                        "ultima": "2026-11-02",
+                        "frequenza": 5,
+                        "prossima": "2026-11-07",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_34",
+                        "zona": "Ponte",
+                        "nome": "Edera",
+                        "ultima": "2026-10-28",
+                        "frequenza": 9,
+                        "prossima": "2026-11-06",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_35",
+                        "zona": "Ponte",
+                        "nome": "Orchidea Pensile",
+                        "ultima": "2026-10-31",
+                        "frequenza": 3,
+                        "prossima": "2026-11-03",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_36",
+                        "zona": "Ponte",
+                        "nome": "Peperomia Gatti",
+                        "ultima": "2026-10-18",
+                        "frequenza": 21,
+                        "prossima": "2026-11-08",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_37",
+                        "zona": "Ponte",
+                        "nome": "Calderone",
+                        "ultima": "2026-10-25",
+                        "frequenza": 21,
+                        "prossima": "2026-11-15",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_38",
+                        "zona": "Ponte",
+                        "nome": "Cactus Gatto",
+                        "ultima": "2026-10-28",
+                        "frequenza": 30,
+                        "prossima": "2026-11-27",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_39",
+                        "zona": "Ponte",
+                        "nome": "Barilotto",
+                        "ultima": "2026-11-02",
+                        "frequenza": 7,
+                        "prossima": "2026-11-09",
+                        "nota": ""
+            },
+            {
+                        "id": "pianta_40",
+                        "zona": "Ponte",
+                        "nome": "Altalena",
+                        "ultima": "2026-11-02",
+                        "frequenza": 10,
+                        "prossima": "2026-11-12",
+                        "nota": ""
+            }
+];
+        let pianteModifiche = {};
+        function oggiPiante() {
+            const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+            const part = type => parts.find(p => p.type === type).value;
+            return `${part('year')}-${part('month')}-${part('day')}`;
+        }
+        function prossimaInnaffiatura(ultima, frequenza) {
+            const date = new Date(ultima + 'T12:00:00Z');
+            date.setUTCDate(date.getUTCDate() + frequenza);
+            return date.toISOString().slice(0, 10);
+        }
+        function datiPianta(base) {
+            const p = { ...base, ...(pianteModifiche[base.id] || {}) };
+            p.prossima = prossimaInnaffiatura(p.ultima, p.frequenza);
+            return p;
+        }
+        function renderPiante() {
+            const content = document.getElementById('piante-content');
+            content.replaceChildren();
+            const oggi = oggiPiante();
+            let scadute = 0;
+            for (const zona of [...new Set(PIANTE_INIZIALI.map(p => p.zona))]) {
+                const section = document.createElement('section'); section.className = 'piante-zona';
+                const title = document.createElement('h3'); title.textContent = zona; section.append(title);
+                const grid = document.createElement('div'); grid.className = 'piante-grid'; section.append(grid);
+                for (const base of PIANTE_INIZIALI.filter(p => p.zona === zona)) {
+                    const p = datiPianta(base);
+                    const card = document.createElement('article'); card.className = 'pianta-card';
+                    if (p.prossima <= oggi) { scadute++; card.classList.add(p.prossima < oggi ? 'pianta-scaduta' : 'pianta-oggi'); }
+                    const name = document.createElement('h4'); name.textContent = p.nome; card.append(name);
+                    for (const [campo, testo, tipo, valore] of [['ultima', 'Ultima innaffiatura', 'date', p.ultima], ['frequenza', 'Frequenza (giorni)', 'number', p.frequenza]]) {
+                        const label = document.createElement('label'); label.textContent = testo;
+                        const input = document.createElement('input'); input.type = tipo; input.value = valore; input.required = true;
+                        input.id = p.id + '-' + campo;
+                        if (tipo === 'number') { input.min = 1; input.max = 365; input.step = 1; }
+                        else input.max = oggi;
+                        input.addEventListener('change', () => {
+                            if (!input.reportValidity()) return;
+                            salvaPianta(p.id, campo, tipo === 'number' ? Number(input.value) : input.value, input);
+                        });
+                        label.append(input); card.append(label);
+                    }
+                    const next = document.createElement('p');
+                    const date = new Date(p.prossima + 'T12:00:00Z').toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+                    next.textContent = 'Prossima: ' + date + (p.prossima < oggi ? ' · Da innaffiare' : p.prossima === oggi ? ' · Oggi' : ''); card.append(next);
+                    if (p.nota) { const note = document.createElement('p'); note.textContent = '💧 ' + p.nota; card.append(note); }
+                    const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Innaffiata oggi';
+                    button.addEventListener('click', () => salvaPianta(p.id, 'ultima', oggiPiante(), button)); card.append(button);
+                    grid.append(card);
+                }
+                content.append(section);
+            }
+            document.getElementById('piante-riepilogo').textContent = `${PIANTE_INIZIALI.length} piante · ${scadute} da innaffiare entro oggi`;
+        }
+        async function salvaPianta(id, campo, valore, control) {
+            control.disabled = true;
+            setSyncStatus('⏳ Salvataggio…');
+            try {
+                await docRef.set({ piante: { [id]: { [campo]: valore } } }, { merge: true });
+                setSyncStatus('✅ Salvato', 2000);
+            } catch (error) {
+                setSyncStatus('❌ Errore salvataggio: riprova');
+                renderPiante();
+            } finally { control.disabled = false; }
+        }
+        function apriPiante() { renderPiante(); apriPannello('piante-modal'); }
+        setInterval(() => { if (document.getElementById('piante-modal').open && !document.activeElement.matches('#piante-content input')) renderPiante(); }, 60000);
 
         let statsState = null;
         let statsInitPending = false;
@@ -1621,6 +2000,8 @@
 
         // ---- Aggiorna UI dai dati Firestore ----
         function updateUI(data) {
+            pianteModifiche = data?.piante || {};
+            if (document.getElementById('piante-modal').open) renderPiante();
             statsState = data?.consumi_stats || null;
             finanzeVerifica = data?.finanze_verifica || null;
             finanzeCaricate = Array.isArray(data?.finanze_movimenti);
