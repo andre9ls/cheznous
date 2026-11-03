@@ -38,3 +38,11 @@ La pagina riceve gli aggiornamenti in tempo reale. Con l’app aperta il telefon
 6. Premere Sincronizza nell’app. Verificare il conto Novelli-Racca, lo storico e i totali.
 
 La pubblicazione di GitHub Pages non pubblica le regole Firebase. La conferma delle autorizzazioni cloud è richiesta separatamente dal controllo di sicurezza del browser.
+
+## Ora di inserimento · MoneyManager 0.8.1
+
+Il campo opzionale `createdAt` contiene l’istante originale di inserimento in millisecondi UTC (0 o assente per un orario non disponibile). Android e pagina conservano il valore durante modifiche ed eliminazioni. Le regole ne validano il tipo e impediscono di cambiarlo o rimuoverlo dopo che un istante è stato registrato; i permessi degli utenti e dei telefoni restano quelli esistenti.
+
+La pagina recupera l’ora dei vecchi movimenti web che usavano Date.now() come ID. Gli ID UUID e gli import storici senza un orario registrato mostrano «ora non disponibile». Non viene usata l’ora di importazione o aggiornamento come falsa ora di inserimento.
+
+Aggiornare i telefoni alla versione 0.8.1: le versioni precedenti non devono eliminare il campo durante la modifica di un movimento già dotato di ora. Nessun nuovo abbinamento richiesto.

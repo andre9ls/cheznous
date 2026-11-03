@@ -55,7 +55,9 @@ service cloud.firestore {
     match /widgetMovements/{id} {
       function valido() {
         let m = request.resource.data;
-        return m.keys().hasOnly(['uid', 'sourceId', 'revision', 'active', 'cents', 'date', 'note'])
+        return m.keys().hasOnly(['uid', 'sourceId', 'revision', 'active', 'cents', 'date', 'note', 'createdAt'])
+          && m.get('createdAt', 0) is int
+          && m.get('createdAt', 0) >= 0 && m.get('createdAt', 0) <= 253402300799999
           && m.uid is string
           && m.sourceId is string
           && m.sourceId.matches('^[A-Za-z0-9_-]{1,128}$')
@@ -73,6 +75,8 @@ service cloud.firestore {
         || (telefonoAbilitato() && request.resource.data.uid == request.auth.uid));
       allow update: if valido() && (autorizzato() || telefonoCondiviso()
           || (telefonoAbilitato() && resource.data.uid == request.auth.uid))
+        && (resource.data.get('createdAt', 0) == 0
+          || request.resource.data.get('createdAt', 0) == resource.data.get('createdAt', 0))
         && request.resource.data.uid == resource.data.uid
         && (resource.data.active || !request.resource.data.active)
         && request.resource.data.sourceId == resource.data.sourceId

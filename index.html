@@ -1144,12 +1144,21 @@
             const m = doc.data();
             if (m.active !== true || !Number.isSafeInteger(m.cents) || !/^\d{4}-\d{2}-\d{2}$/.test(m.date)) return null;
             const [year, month, day] = m.date.split('-');
+            const insertedAt = m.createdAt > 0 ? m.createdAt : (m.uid === 'web' && /^[0-9]{13}$/.test(m.sourceId) ? Number(m.sourceId) : 0);
             return { id: doc.id, revision: m.revision, tipo: m.cents >= 0 ? 'accredito' : 'spesa',
                 desc: m.note || (m.cents >= 0 ? 'Accredito' : 'Spesa'),
                 importo: Math.abs(m.cents) / 100, data: `${day}/${month}/${year}`,
-                ts: new Date(Number(year), Number(month) - 1, Number(day), 12).getTime(), widget: m.uid !== 'web' };
+                insertedAt, ts: insertedAt, widget: m.uid !== 'web' };
         }
 
+
+        function orarioInserimento(m) {
+            if (!m.insertedAt) return ' · ora non disponibile';
+            const date = new Date(m.insertedAt);
+            const day = date.toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric'});
+            const time = date.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'});
+            return day === m.data ? ' · ' + time : ' · inserito il ' + day + ' alle ' + time;
+        }
 
         function datiFinanza(item) {
             const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(item.data || '');
@@ -1159,7 +1168,7 @@
             if (Number.isNaN(parsed.getTime()) || parsed.getFullYear() !== Number(match[3]) || parsed.getMonth() + 1 !== Number(match[2]) || parsed.getDate() !== Number(match[1])) throw new Error('storico-non-valido');
             const cents = Math.round(Number(item.importo) * 100) * (item.tipo === 'accredito' ? 1 : -1);
             if (!Number.isSafeInteger(cents) || Math.abs(cents) > 10000000000 || String(item.desc || '').length > 200) throw new Error('storico-non-valido');
-            return {uid: 'web', sourceId: item.id, revision: 0, active: true, cents, date, note: item.desc || ''};
+            return {uid: 'web', sourceId: item.id, revision: 0, active: true, cents, date, note: item.desc || '', createdAt: /^[0-9]{13}$/.test(item.id) ? Number(item.id) : 0};
         }
 
         async function migraFinanze() {
@@ -1206,6 +1215,7 @@
 
         async function scriviFinanza(id, changes, expectedRevision = null) {
             if (!finanzePronte()) return false;
+            const insertedAt = Date.now();
             try {
                 await db.runTransaction(async transaction => {
                     const state = await transaction.get(widgetState);
@@ -1215,6 +1225,7 @@
                     if (expectedRevision !== null && (!old || old.revision !== expectedRevision)) throw new Error('conflitto-finanze');
                     if (old && old.active === false && changes.active !== false) throw new Error('conflitto-finanze');
                     transaction.set(target, {...(old || {uid: 'web', sourceId: id.slice(4)}), ...changes,
+                        createdAt: old ? (old.createdAt || (old.uid === 'web' && /^[0-9]{13}$/.test(old.sourceId) ? Number(old.sourceId) : 0)) : (changes.createdAt || insertedAt),
                         revision: old ? old.revision + 1 : 0});
                     transaction.set(widgetState, {version: state.data().version + 1,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
@@ -1482,7 +1493,7 @@
                     <div class="finanze-item" id="row-${m.id}">
                         <div style="display: flex; flex-direction: column; flex: 1;">
                             <span style="font-weight: 600;">${escapeHTML(m.desc)}</span>
-                            <span style="font-size: 0.75rem; opacity: 0.65;">${escapeHTML(m.data)}${m.widget ? ' · Dal widget' : ''}</span>
+                            <span style="font-size: 0.75rem; opacity: 0.65;">${escapeHTML(m.data)}${orarioInserimento(m)}${m.widget ? ' · Dal widget' : ''}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <b style="color: ${col}; font-size: 1rem;">${sgn} ${impFmt} €</b>
