@@ -46,3 +46,7 @@ Il campo opzionale `createdAt` contiene l’istante originale di inserimento in 
 La pagina recupera l’ora dei vecchi movimenti web che usavano Date.now() come ID. Gli ID UUID e gli import storici senza un orario registrato mostrano «ora non disponibile». Non viene usata l’ora di importazione o aggiornamento come falsa ora di inserimento.
 
 Aggiornare i telefoni alla versione 0.8.1: le versioni precedenti non devono eliminare il campo durante la modifica di un movimento già dotato di ora. Nessun nuovo abbinamento richiesto.
+
+
+## Consumi rapidi dal widget (MoneyManager 0.9.0)
+I telefoni già autorizzati in modalità bidirezionale possono registrare un solo utilizzo per volta di `lavatrice`, `acchiappacolore` o `lavastoviglie`. Ogni transazione sottrae 1 dalla scorta, aggiunge 1 a `consumi_stats.consumed` e crea una ricevuta immutabile in `widgetUses/{uid}_{uuid}`. La ricevuta impedisce che un tentativo ripetuto consumi nuovamente lo stesso prodotto. Il widget non legge il documento domestico, non aumenta scorte e non modifica altri contatori o note. Le quantità restano non negative. Le aggiunte rimangono sul sito. La coda locale conserva gli utilizzi offline fino al ritorno della rete; un rifiuto definitivo per scorta o permessi è segnalato nel widget.

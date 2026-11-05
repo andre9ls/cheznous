@@ -22,12 +22,48 @@ service cloud.firestore {
       let path = /databases/$(database)/documents/widgetState/finanze;
       return getAfter(path).data.version == (exists(path) ? get(path).data.version + 1 : 1);
     }
+    // The widget may consume exactly one unit of these three products, without reading the household document.
+    function consumoWidget() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let use = after.widgetUse;
+      let item = use.item;
+      let receipt = /databases/$(database)/documents/widgetUses/$(request.auth.uid + '_' + use.id);
+      let oldStats = before.get('consumi_stats', {});
+      let newStats = after.consumi_stats;
+      let oldConsumed = oldStats.get('consumed', {});
+      return telefonoCondiviso()
+        && use.keys().hasOnly(['uid', 'id', 'item']) && use.uid == request.auth.uid
+        && use.id is string && use.id.matches('^[A-Za-z0-9-]{36}$')
+        && item in ['lavatrice', 'acchiappacolore', 'lavastoviglie']
+        && after.diff(before).affectedKeys().hasOnly([item, 'consumi_stats', 'widgetUse'])
+        && before.get(item, 0) is int && before.get(item, 0) > 0
+        && after[item] == before[item] - 1
+        && newStats.diff(oldStats).affectedKeys().hasOnly(['consumed'])
+        && newStats.consumed.diff(oldConsumed).affectedKeys().hasOnly([item])
+        && newStats.consumed[item] == oldConsumed.get(item, 0) + 1
+        && !exists(receipt) && getAfter(receipt).data.uid == request.auth.uid
+        && getAfter(receipt).data.item == item;
+    }
     match /varie/contatori {
       allow get, create: if autorizzato();
       // Keep the pre-migration finance array as an immutable archive. Other household fields still work.
-      allow update: if autorizzato() && (!resource.data.get('finanze_migrate', false)
+      allow update: if consumoWidget() || (autorizzato() && (!resource.data.get('finanze_migrate', false)
         || (request.resource.data.get('finanze_migrate', false) == true
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['finanze_movimenti'])));
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['finanze_movimenti']))));
+    }
+    match /widgetUses/{id} {
+      allow get: if request.auth != null && id.matches('^' + request.auth.uid + '_[A-Za-z0-9-]{36}$');
+      allow create: if telefonoCondiviso()
+        && request.resource.data.keys().hasOnly(['uid', 'item', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.item in ['lavatrice', 'acchiappacolore', 'lavastoviglie']
+        && id == request.auth.uid + '_' + getAfter(/databases/$(database)/documents/varie/contatori).data.widgetUse.id
+        && getAfter(/databases/$(database)/documents/varie/contatori).data.widgetUse.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/varie/contatori).data.widgetUse.item == request.resource.data.item
+        && getAfter(/databases/$(database)/documents/varie/contatori).data[request.resource.data.item]
+          == get(/databases/$(database)/documents/varie/contatori).data[request.resource.data.item] - 1;
     }
     match /widgetDevices/{uid} {
       // Only the household can approve/revoke a device. A phone can check its own approval.
